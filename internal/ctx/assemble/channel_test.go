@@ -22,7 +22,22 @@ func TestChannelTurn(t *testing.T) {
 	want := `#11: @codex look
 
 <channel-context>
-You are codex in a channel shared with people and other agents. Its agents: claude (agent claude, model claude-opus-5-5, effort high), codex. Only what you say reaches the channel: your thinking and tool calls stay yours, and you do not see theirs. Before you start to work (reading, running tools), say one short line of what you are about to do: the channel shows your work under the words you last said. To call another agent, write @ and its name in what you say; without that no agent is called. Between agents, @ another only when you need its answer; when the exchange has said what it needs to, reply without @ and it ends there (agents passing it on without a person stop after a few turns anyway). After you @ an agent, end your turn: its answer comes in the channel, and one that answers you calls you. Do not restate what the channel already shows, nor ids, folders or states. To name one without calling it, write its name without @. Called with nothing to say (thanks, an acknowledgement): end your turn with ir api POST internal/sessions/self/interrupt; nothing is said for you.
+Channel: this session's own, shared with people and other agents | You: codex
+Agents:
+- claude (claude, claude-opus-5-5, effort high)
+- codex
+
+Rules:
+- Reply directly: only what you write reaches the channel; your thinking and tool calls stay yours, and you do not see theirs.
+- Before tools: one short line of what you're about to do (work folds under it).
+- Mentions: ` + "`@Nick` calls an agent; `Nick` without `@` only names it. Between agents, `@` only when you need a reply; omit it to end (agents passing it on without a person stop after a few turns anyway). End your turn after `@`ing an agent: its answer comes here, and one that answers you calls you." + `
+- Keep it tight: don't restate visible context, IDs, paths or states. Nothing to add (thanks/ack)? Write nothing and run ` + "`ir api POST internal/sessions/self/interrupt`" + `.
+
+Commands:
+- History: ` + "`ir api message.list channel_id=self [next=<n> limit=<n>]` (search: `_data.q=\"<words>\"`)" + `
+- Full message: ` + "`ir api message.get channel_id=self message_id=<n>`" + `
+- React: ` + "`ir api reaction.create channel_id=self message_id=<n> emoji=👍` (shown as `#<n> [who reacted 👍 to: …]`)" + `
+
 #1–#4: 4 earlier messages, not shown.
 Listed by turn (who asked, their first words, who answered):
 #5–#8 kumo: fix the build (answered by claude)
@@ -31,8 +46,6 @@ In full, what was said since you last read the channel:
 #10 [kumo · 01-01 01:01]: long […7 more characters: ir api message.get channel_id=self message_id=10]
 Work since you last read the channel (tool calls counted; files as changed by editing tools, not by shell commands):
 claude: bash 7 (go 4, git 3), 1 failed · 2 files +123 −14 · read 2 · web 1 — /w/a.go, /w/b.go
-More of the channel: ir api message.list channel_id=self [next=<number> limit=<n>]; by words: ir api message.list channel_id=self _data.q="<words>"; one message whole: ir api message.get channel_id=self message_id=<number>.
-React to a message rather than answer it in words: ir api reaction.create channel_id=self message_id=<number> emoji=👍. A line "#<number> [who reacted 👍 to: …]" is someone's reaction to that message.
 </channel-context>`
 	if got := in.String(); got != want {
 		t.Errorf("got:\n%s\nwant:\n%s", got, want)
@@ -55,7 +68,7 @@ React to a message rather than answer it in words: ir api reaction.create channe
 	}
 	// Nothing unseen: who is there, nothing else.
 	in, _ = ChannelTurn(Channel{You: "a", Agents: []ChannelAgent{{Nick: "a"}}}, 1, "hi", "")
-	if got := in.String(); got != "#1: hi\n\n<channel-context>\nYou are a in a channel shared with people and other agents. Its agents: a. Only what you say reaches the channel: your thinking and tool calls stay yours, and you do not see theirs. Before you start to work (reading, running tools), say one short line of what you are about to do: the channel shows your work under the words you last said. To call another agent, write @ and its name in what you say; without that no agent is called. Between agents, @ another only when you need its answer; when the exchange has said what it needs to, reply without @ and it ends there (agents passing it on without a person stop after a few turns anyway). After you @ an agent, end your turn: its answer comes in the channel, and one that answers you calls you. Do not restate what the channel already shows, nor ids, folders or states. To name one without calling it, write its name without @. Called with nothing to say (thanks, an acknowledgement): end your turn with ir api POST internal/sessions/self/interrupt; nothing is said for you.\n</channel-context>" {
+	if got := in.String(); got != "#1: hi\n\n<channel-context>\nChannel: this session's own, shared with people and other agents | You: a\nAgents:\n- a\n\nRules:\n- Reply directly: only what you write reaches the channel; your thinking and tool calls stay yours, and you do not see theirs.\n- Before tools: one short line of what you're about to do (work folds under it).\n- Mentions: `@Nick` calls an agent; `Nick` without `@` only names it. Between agents, `@` only when you need a reply; omit it to end (agents passing it on without a person stop after a few turns anyway). End your turn after `@`ing an agent: its answer comes here, and one that answers you calls you.\n- Keep it tight: don't restate visible context, IDs, paths or states.\n</channel-context>" {
 		t.Errorf("bare: %q", got)
 	}
 }
@@ -127,17 +140,17 @@ func TestChannelPlace(t *testing.T) {
 		}
 	}
 	home := Channel{You: "a", Place: "host:/w/ir", Agents: []ChannelAgent{{Nick: "a"}, {Nick: "b"}}}
-	has(home, "The channel's folder", false)
+	has(home, "Folder:", false)
 	// Another works elsewhere: the one at home is told where the channel is and where that one is.
 	other := home
 	other.Agents = []ChannelAgent{{Nick: "a"}, {Nick: "b", At: `win:C:\Code\x`}}
-	has(other, `Its agents: a, b (at win:C:\Code\x).`, true)
-	has(other, "The channel's folder is host:/w/ir;", true)
-	has(other, "You are one of those", false)
+	has(other, "Agents:\n- a\n- b (at win:C:\\Code\\x)\n", true)
+	has(other, "Folder: host:/w/ir;", true)
+	has(other, "You work at", false)
 	// The one called works elsewhere itself: how it writes a file of its own.
 	away := other
 	away.You, away.At = "b", `win:C:\Code\x`
-	has(away, `you work at win:C:\Code\x.`, true)
+	has(away, `You work at win:C:\Code\x:`, true)
 	has(away, `(win:C:\Code\x\notes.md)`, true)
 	away.At = "host:/w/other/"
 	has(away, "(host:/w/other/notes.md)", true)
@@ -155,14 +168,14 @@ func TestWhere(t *testing.T) {
 		}
 		return in.String()
 	}
-	if got := sys(Where{Folder: "/w/ir", OS: "linux"}); !strings.Contains(got, "Where: you run at the host (Linux), in /w/ir.\n") {
+	if got := sys(Where{Folder: "/w/ir", OS: "linux"}); !strings.Contains(got, "## Runtime\n- Host: Linux, `/w/ir`\n") {
 		t.Error(got)
 	}
 	got := sys(Where{Remote: true, IR: true, Folder: `C:\Code\x`, OS: "windows", Computer: "otae-win"})
-	if !strings.Contains(got, `Where: you run at otae-win (Windows), in C:\Code\x: another computer than the host.`) {
+	if !strings.Contains(got, "- Computer: otae-win (Windows), `C:\\Code\\x` — not the host.") {
 		t.Error(got)
 	}
-	if got := sys(Where{}); strings.Contains(got, "Where:") {
+	if got := sys(Where{}); strings.Contains(got, "## Runtime") {
 		t.Error("said without a folder")
 	}
 }

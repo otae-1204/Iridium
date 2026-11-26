@@ -1,0 +1,1 @@
+- Keep it tight: don't restate visible context, IDs, paths or states.

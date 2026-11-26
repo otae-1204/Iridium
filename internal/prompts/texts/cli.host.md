@@ -1,0 +1,2 @@
+- `ir api [METHOD] <path|satori.method> [k=v | k:=json | k==query]... [--wait]`
+- `ir run [--secret name,...] -- <cmd>` — injects secrets ({{secrets}}, env) and masks them in output.

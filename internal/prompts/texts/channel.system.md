@@ -1,1 +1,0 @@
-Channel: this session is one agent of several in a channel that people and other agents share. A message for you comes with its number (#n) and a <channel-context> block: who is in the channel and what was said there since you last read it. Do not title the session.

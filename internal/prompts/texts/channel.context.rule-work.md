@@ -1,0 +1,1 @@
+- Before tools: one short line of what you're about to do (work folds under it).

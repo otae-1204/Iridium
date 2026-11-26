@@ -3,12 +3,21 @@ package assemble
 // The fragments (internal/prompts/texts/<id>.md) this package gives agents: every one of them,
 // and each used (ids_test.go).
 const (
+	idIridiumOpen      = "iridium.open" // the system prompt's own block
+	idIridiumClose     = "iridium.close"
 	idHostIntro        = "host.intro"         // a session hosted here: what its ir reaches
-	idHostSecretsFiles = "host.secrets-files" // how to ask for a secret, how to hand over a file
+	idCLI              = "cli"                // heads the CLI section
+	idCLIHost          = "cli.host"           // ir api and ir run at the host: {{secrets}}
+	idCLIRemote        = "cli.remote"         // ir api at another machine, and what it does not reach
+	idCLIDiscover      = "cli.discover"       // how to read ir api help: {{topics}}
+	idHostSecretsFiles = "host.secrets-files" // how to ask for a secret, where wake is told
+	idLinks            = "links"              // heads the Links section
+	idLinksFiles       = "links.files"        // how to hand over a file
+	idRuntime          = "runtime"            // heads the Runtime section
 	idHostManual       = "host.manual"        // Claude: how to ask for manual approval, auto mode having denied a step
 	idShellIR          = "shell.ir"           // a command line at a computer reaches the Iridium there, with its host's rights
 	idNames            = "names"              // how words name a session or a folder
-	idTitle            = "title"              // title the session
+	idTitle            = "title"              // the Title section: title the session
 	idTitleNow         = "title.now"          // after a message, now and then: the session's title as it is
 	idTitleNone        = "title.none"         // the same for a session with none yet
 	idTitleNowOf       = "title.now-channel"  // the same, of a channel the agent is in beside its own
@@ -25,7 +34,6 @@ const (
 	idWhereRemote      = "where.remote"       // at {{computer}}: how paths are written from there
 
 	// A channel of several agents (channel.go).
-	idChannelSystem     = "channel.system"  // in place of title: one agent of several
 	idChannelMessage    = "channel.message" // before the words: the message's number
 	idChannelQuote      = "channel.quote"   // then the message it answers: its number, who said it
 	idChannelQuoteEnd   = "channel.quote-end"
@@ -68,7 +76,9 @@ const (
 	idNL           = "nl" // a line's end
 
 	// What an agent is told of itself (self.go).
+	idSelfSection      = "self.section"       // heads the Collaboration & Memory section
 	idSelfWho          = "self.who"           // the nick it goes by
+	idSelfPersona      = "self.persona"       // before its persona's words
 	idSelfMemory       = "self.memory"        // heads what it chose to remember
 	idSelfMemoryLine   = "self.memory-line"   // before one memory: when, where from
 	idSelfMemoryMore   = "self.memory-more"   // how many more there are
@@ -86,7 +96,15 @@ const (
 	idChannelScripts        = "channel.context.scripts"           // the scripts IR runs there
 	idChannelPlace          = "channel.context.place"             // the channel's folder, when an agent works elsewhere
 	idChannelAway           = "channel.context.away"              // the agent called is one that does
-	idChannelRecv           = "channel.context.recv"              // receive sets, and how to change one
+	idChannelRecv           = "channel.context.recv"              // receive sets: any member may change one
+	idChannelRules          = "channel.context.rules"             // heads the rules
+	idChannelRuleOwn        = "channel.context.rule-own"          // its own channel: only what it says reaches it
+	idChannelRuleGuest      = "channel.context.rule-guest"        // another's: what it writes is said there, not with ir
+	idChannelRuleGuestBare  = "channel.context.rule-guest-bare"   // the same without ir
+	idChannelRuleWork       = "channel.context.rule-work"         // a line before working
+	idChannelRuleMention    = "channel.context.rule-mention"      // @ calls, a name names
+	idChannelRuleTight      = "channel.context.rule-tight"        // say little; nothing to say: interrupt
+	idChannelRuleTightBare  = "channel.context.rule-tight-bare"   // the same without ir
 	idChannelProfiles       = "channel.context.profiles"          // heads the cards changed
 	idChannelProfileName    = "channel.context.profile-name"      // one renamed
 	idChannelProfilePersona = "channel.context.profile-persona"   // before its own new persona (only its own is told)

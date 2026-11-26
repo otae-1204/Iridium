@@ -1,0 +1,1 @@
+- Keep it tight: don't restate visible context, IDs, paths or states. Nothing to add (thanks/ack)? Write nothing and run `ir api POST internal/sessions/self/interrupt`.

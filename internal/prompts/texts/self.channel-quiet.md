@@ -1,1 +1,1 @@
-- "{{name}}" ({{channel}}): you have not spoken there
+  - "{{name}}" ({{channel}}): not spoken there

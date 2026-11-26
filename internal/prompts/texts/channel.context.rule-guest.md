@@ -1,0 +1,1 @@
+- Reply directly: text you write posts to this channel; tool calls stay private (this is not your own session). Never repeat it with `ir api message.create` (other channels only).

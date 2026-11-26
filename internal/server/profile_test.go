@@ -76,7 +76,7 @@ func TestProfileCards(t *testing.T) {
 		t.Errorf("told of itself: %+v", self)
 	}
 	in, err := assemble.System(assemble.Where{Self: self})
-	if err != nil || !strings.Contains(in.String(), "You go by tester here.") || !strings.Contains(in.String(), "ir api internal/remember") {
+	if err != nil || !strings.Contains(in.String(), "- Nick: tester\n") || !strings.Contains(in.String(), "ir api internal/remember") {
 		t.Errorf("the system prompt: %v\n%s", err, in.String())
 	}
 }
@@ -210,7 +210,7 @@ func TestRolePersona(t *testing.T) {
 	self := l.s.selfText(two)
 	in, err := assemble.System(assemble.Where{Self: self})
 	text := in.String()
-	if err != nil || !strings.Contains(text, "here.\nonly sure findings\nverdict first\n") {
+	if err != nil || !strings.Contains(text, "- Persona (your own words): only sure findings\nverdict first\n") {
 		t.Errorf("the system prompt: %v\n%s", err, text)
 	}
 	// 更新角色: the card comes back, the model does not; the role's name stays.

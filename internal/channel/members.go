@@ -88,9 +88,11 @@ func (s *Service) nickOf(session string, base func(session string) string) (stri
 // stems are the names a default nick begins with, by harness.
 var stems = map[string]string{"claude": "Claude", "codex": "Codex", "pi": "Pi", "dsh": "DeepSeek"}
 
-// defaultNick is what DefaultNick makes: a harness's name, "-", hex digits. A role's name with
-// its session's digits after it (NickWithID) is a name chosen, not one of these.
-var defaultNick = regexp.MustCompile(`^(Agent|Claude|Codex|DeepSeek|Pi)-[0-9a-f]{4,}$`)
+// defaultNick is what DefaultNick makes: a harness's name, "-", hex digits; agy's ("Agent-…"
+// here) also as named by its Gemini model's code name (Neon-d04a, Hydrogen-…), so that agy is
+// asked to name itself too (kumo, 2026-11-26). A role's name with its session's digits after it
+// (NickWithID) is a name chosen, not one of these.
+var defaultNick = regexp.MustCompile(`^(Agent|Claude|Codex|DeepSeek|Pi|Agy|Gemini|Argon|Hydrogen|Neon)-[0-9a-f]{4,}$`)
 
 // DefaultNick is the nick an agent goes by till it gives itself one (kumo, 2026-11-16: not
 // claude2): its harness's name and four hex digits of its session's id (Claude-b134), more

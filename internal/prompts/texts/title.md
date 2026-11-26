@@ -1,1 +1,6 @@
-Title: as your first action in a session, and again only when its subject changes, run ir api channel.update channel_id=self data.name="<title>": a short name for the specific thing and task, in the user's language, without punctuation, quotes or emoji. If the user named it, leave it.
+
+## Title
+- First tool call: run `ir api channel.update channel_id=self data.name="<title>"` in parallel, without asking (untitled sessions are unreadable in the sidebar).
+- Topic shift: whenever the user moves to a different bug, feature or question — even in the same repo — update it at once.
+- Some messages end with `Session title: "…"` (or `Channel <id> title: "…"` for a channel you are in beside your own session: update that channel's id instead of self): the title as it is now. If it no longer fits the work, update it.
+- Short, specific, user's language, no quotes/punctuation/emoji. Never change one the user set.

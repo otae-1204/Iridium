@@ -59,7 +59,18 @@ func (s *Self) day(at int64) string {
 	return time.UnixMilli(at).In(zone).Format("2006-01-02")
 }
 
-// selfPieces are what the system prompt says of the agent itself; none for nil.
+// collabPieces are the Collaboration & Memory section of an agent with ir: how to get help from
+// another agent; with what it is told of itself, how to look the records up, remember, change
+// profiles.
+func collabPieces(s *Self) []piece {
+	ps := []piece{text(idSelfSection), text(idSelfHelpers)}
+	if s != nil && s.IR {
+		ps = append(ps, text(idSelfTools), text(idSelfRemember), text(idSelfProfile))
+	}
+	return ps
+}
+
+// selfPieces are what the system prompt's Runtime says of the agent itself; none for nil.
 func selfPieces(s *Self) []piece {
 	if s == nil {
 		return nil
@@ -69,7 +80,7 @@ func selfPieces(s *Self) []piece {
 		ps = append(ps, text(idSelfWho, "nick", s.Nick))
 	}
 	if s.Persona != "" {
-		ps = append(ps, words(s.Persona, Ref{Kind: "profile", ID: "persona"}), text(idNL))
+		ps = append(ps, text(idSelfPersona), words(s.Persona, Ref{Kind: "profile", ID: "persona"}), text(idNL))
 	}
 	if len(s.Memory) > 0 {
 		ps = append(ps, text(idSelfMemory))
@@ -105,9 +116,6 @@ func selfPieces(s *Self) []piece {
 			ps = append(ps, text(idSelfBeforeLine, "date", s.day(b.At), "turns", strconv.Itoa(b.Turns), "session", b.Session),
 				words(b.First, Ref{Kind: "session", ID: b.Session}), text(idNL))
 		}
-	}
-	if s.IR {
-		ps = append(ps, text(idSelfTools), text(idSelfRemember), text(idSelfProfile), text(idSelfHelpers))
 	}
 	return ps
 }

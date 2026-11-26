@@ -20,8 +20,8 @@ const Usage = `ir api [METHOD] <path|satori.method> [k=v | k:=json | k==query]..
   exit: 0 done, 2 needs the user (a question, an approval), 1 error
 `
 
-// Layers is how ir api help is read, a layer at a time; the system prompt carries it, so an agent
-// goes to the layer it needs at once.
+// Layers is how ir api help is read, a layer at a time, as ir api help prints it (the system
+// prompt says it in its own words: internal/prompts/texts/cli.discover.md).
 func Layers() string {
 	var ts []string
 	for _, t := range Topics() {

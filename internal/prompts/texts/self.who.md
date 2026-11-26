@@ -1,1 +1,1 @@
-You go by {{nick}} here.
+- Nick: {{nick}}

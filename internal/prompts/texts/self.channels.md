@@ -1,1 +1,1 @@
-Channels you are in, from Iridium's records:
+- Channels you are in (Iridium's records):

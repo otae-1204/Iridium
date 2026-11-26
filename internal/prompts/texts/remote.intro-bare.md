@@ -1,1 +1,1 @@
-This session is hosted by Iridium and runs at another machine than Iridium's own.
+Hosted by Iridium, at another machine than Iridium's own.

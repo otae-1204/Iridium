@@ -1,1 +1,1 @@
-Names: [title](ir:session/<id>) is a session, [name](ir:folder/<path>) a folder (<computer>:<path> at another), as the user's messages write them, shown as links to them. Satori's <img src="ir:id"/>, <file src="ir:id"/> and <sharp id name/> work too.
+- Refs: `[title](ir:session/<id>)`, `[name](ir:folder/<path>)` (remote: `<computer>:<path>`), as the user's messages write them, shown as links. Satori's `<img src="ir:id"/>`, `<file src="ir:id"/>` and `<sharp id name/>` work too.

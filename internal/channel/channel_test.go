@@ -313,6 +313,9 @@ func TestDefaultNick(t *testing.T) {
 	if IsDefaultNick("Fable-fd54") {
 		t.Error("a role's name with digits after it taken for one of Iridium's")
 	}
+	if !IsDefaultNick(DefaultNick("agy", "d04a1234", func(string) bool { return false })) || !IsDefaultNick("Neon-d04a") || !IsDefaultNick("Hydrogen-a13e") {
+		t.Error("agy's default nicks")
+	}
 	if !IsDefaultNick("Claude-b134") || IsDefaultNick("大肥鱼") || IsDefaultNick("claude2") {
 		t.Error("IsDefaultNick")
 	}

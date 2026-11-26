@@ -1,0 +1,2 @@
+- `ir api [METHOD] <path|satori.method> [k=v | k:=json | k==query]... [--wait]` — reaches the Iridium hosting this session over HTTPS, as this computer's app; a folder is this computer's.
+- Not from here: `ir run`, routes marked socket only, admin commands; ask a session on the host.

@@ -51,8 +51,8 @@ type meta struct {
 	Launcher string `json:"launcher,omitempty"`
 	// Machine: the executor it runs at, by terminal ID (docs/exec.md); "": here. Cwd is its path there.
 	Machine string `json:"machine,omitempty"`
-	// ForChannel: started directly for a shared channel, so its initial system prompt uses
-	// channel.system instead of title.md before membership is recorded.
+	// ForChannel: started directly for a shared channel: the title line after a message is the
+	// server's to give there (titleNow), before membership is recorded too.
 	ForChannel bool `json:"forChannel,omitempty"`
 }
 
@@ -310,7 +310,7 @@ func (h *Hosted) launch(ctx context.Context, proc int) error {
 		return err
 	}
 	prompt := filepath.Join(h.dir, filePrompt)
-	where := assemble.Where{Lang: m.tuned().Lang, Channel: h.meta.ForChannel || m.inChannel(h.id), Self: m.self(h.id), Folder: h.meta.Cwd, OS: runtime.GOOS, Auto: h.meta.Agent == api.AgentClaude}
+	where := assemble.Where{Lang: m.tuned().Lang, Self: m.self(h.id), Folder: h.meta.Cwd, OS: runtime.GOOS, Auto: h.meta.Agent == api.AgentClaude}
 	if mc := h.machine(); mc != nil {
 		hi, _ := mc.Hello()
 		where.Remote, where.IR, where.OS = true, hi != nil && hi.IRClient, ""

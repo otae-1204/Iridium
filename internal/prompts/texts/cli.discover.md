@@ -1,0 +1,1 @@
+- Discover routes progressively (read only what you need): `ir api help <METHOD path | satori.method>` (read `[more]` entries before first call), `ir api help <topic>` ({{topics}}), or `ir api help <keywords>`. `ir api help` alone: syntax and common routes; `ir api help all`: every route.

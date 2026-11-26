@@ -1,5 +1,6 @@
-// Package irhelp is ir's help: what ir --help prints, and its agent part, which every hosted
-// agent's system prompt carries (assemble.System), so an agent need not run ir --help first.
+// Package irhelp is ir's help: what ir --help prints, and its agent part. A hosted agent's
+// system prompt (assemble.System) says the same commands in its own fragments, with
+// ir api help's topics from here.
 package irhelp
 
 import "strings"

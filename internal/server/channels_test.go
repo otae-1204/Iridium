@@ -202,7 +202,7 @@ func TestChannelOfSeveral(t *testing.T) {
 		t.Fatalf("the second agent's record: %+v", p.Blocks)
 	}
 	got := p.Blocks[0].Text
-	for _, want := range []string{fmt.Sprintf("#%d: now @claude2 look", r.Seq), "<channel-context>", "You are claude2, called in the channel", "(" + ch + ")", "said in the channel as you write it",
+	for _, want := range []string{fmt.Sprintf("#%d: now @claude2 look", r.Seq), "<channel-context>", "Channel: \"", "(" + ch + ") | You: claude2", "text you write posts to this channel",
 		"message.list channel_id=" + ch, "claude (", "]: first\n", "]: ok: first\n", "]: plain words\n", "</channel-context>"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("given without %q:\n%s", want, got)
@@ -567,7 +567,7 @@ func TestChannelBare(t *testing.T) {
 	l.wantSat(200, bot, "message.create", map[string]any{"channel_id": ch, "content": `<at id="agent:` + agent + `"/> look at this`}, &sent)
 	l.waitSaid("web", agent, "@"+nick+" look at this")
 	got := l.page("web", agent).Blocks[0].Text
-	for _, want := range []string{"called in the channel \"room\"", "]: anyone here\n", "(" + ch + ")", "said in the channel as you write it"} {
+	for _, want := range []string{"Channel: \"room\" (" + ch + ")", "]: anyone here\n", "text you write posts to this channel"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("given without %q:\n%s", want, got)
 		}
@@ -834,10 +834,11 @@ func TestChannelQuoteAndAll(t *testing.T) {
 	// before." is repeated (docs/channels.md "增量").
 	var allIns []api.Injection
 	l.want(200, "web", "GET", "/v1/internal/sessions/"+second+"/injections", nil, &allIns)
-	// Spawned for a shared channel: system prompt uses channel.system rather than title.md.
+	// Spawned for a shared channel: its system prompt has the Title section too, as every
+	// session's (kumo, 2026-11-26).
 	for _, x := range allIns {
 		if strings.Contains(string(x.Record), `"kind":"system"`) {
-			if strings.Contains(string(x.Record), "prompts:title") || !strings.Contains(string(x.Record), "prompts:channel.system") {
+			if !strings.Contains(string(x.Record), "prompts:title") {
 				t.Errorf("spawned channel agent system prompt: %s", x.Record)
 			}
 		}
@@ -875,7 +876,7 @@ func TestChannelQuoteAndAll(t *testing.T) {
 		again == "" || strings.Contains(again, " full>") || !strings.HasSuffix(again, "@全体Agent roll call</message></message>") {
 		t.Errorf("forwards:\n%s", strings.Join(fwds, "\n"))
 	}
-	if strings.Contains(given, `In the channel "`) || strings.Contains(given, "You are claude2") {
+	if strings.Contains(given, `In the channel "`) || strings.Contains(given, "| You: claude2") {
 		t.Errorf("given again in same channel with redundant header:\n%s\n%+v", given, p.Blocks)
 	}
 }
@@ -1104,7 +1105,7 @@ func TestInjectionsWhole(t *testing.T) {
 	var system, msg bool
 	for _, in := range ins {
 		r := string(in.Record)
-		system = system || (strings.Contains(r, `"kind":"system"`) && strings.Contains(r, "hosted by Iridium"))
+		system = system || (strings.Contains(r, `"kind":"system"`) && strings.Contains(r, "Hosted by Iridium"))
 		msg = msg || (strings.Contains(r, `"kind":"message"`) && strings.Contains(r, "first words"))
 	}
 	if !system || !msg {
@@ -1250,7 +1251,7 @@ func TestChannelAgentElsewhere(t *testing.T) {
 	if len(p.Blocks) == 0 {
 		t.Fatal("nothing given")
 	}
-	for _, want := range []string{"The channel's folder is host:" + l.work + ";", "away (", "at host:" + other, "you work at host:" + other + ".", "(host:" + other + "/notes.md)"} {
+	for _, want := range []string{"Folder: host:" + l.work + ";", "- away (", "at host:" + other, "You work at host:" + other + ":", "(host:" + other + "/notes.md)"} {
 		if !strings.Contains(p.Blocks[0].Text, want) {
 			t.Errorf("given without %q:\n%s", want, p.Blocks[0].Text)
 		}

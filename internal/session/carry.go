@@ -58,7 +58,7 @@ func (h *Hosted) updateTail(f *transcript.File, old, size int64) {
 type Annotate func(session, cwd string, blocks []api.Block)
 
 // SetInChannel has f say whether a session's channel has other agents in it
-// (docs/channels.md): its system prompt says so, in place of the line about titling.
+// (docs/channels.md): the title line after a message is then the server's to give (titleNow).
 func (m *Manager) SetInChannel(f func(id string) bool) { m.inChan.Store(&f) }
 
 func (m *Manager) inChannel(id string) bool {

@@ -1,0 +1,1 @@
+- Reply directly: only what you write reaches the channel; your thinking and tool calls stay yours, and you do not see theirs.

@@ -1,1 +1,1 @@
-- {{date}}{{from}}: 
+  - {{date}}{{from}}: 

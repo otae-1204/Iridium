@@ -1,0 +1,1 @@
+- Local files/media: run `ir api POST internal/links path=<path>` and embed its Markdown (`![caption](ir:id)` inline: picture, video or sound; `[text](ir:id)` download). Raw paths, `file://` links or local images show as plain text.

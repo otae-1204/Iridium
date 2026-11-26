@@ -1,1 +1,1 @@
-Profiles: your own nick, persona and face, another agent's and the channel's can be changed (ir api help profile). Do it when a role becomes clear or changes, or when asked, in the same turn as the work at hand; otherwise leave them.
+- Profile (`ir api help profile`): your nick, persona and face, another agent's and the channel's. Change them without asking when asked or a role becomes clear or changes, in the same turn as the work; otherwise leave them.

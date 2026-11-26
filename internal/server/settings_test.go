@@ -61,7 +61,7 @@ func TestSettings(t *testing.T) {
 		t.Errorf("new session's mode %q, want plan", ss.Mode)
 	}
 	// Its agent is told the user's language.
-	if b, err := os.ReadFile(filepath.Join(state, "hold", created, "system-prompt.md")); err != nil || !strings.Contains(string(b), "web settings: Chinese.") {
+	if b, err := os.ReadFile(filepath.Join(state, "hold", created, "system-prompt.md")); err != nil || !strings.Contains(string(b), "- User's language: Chinese\n") {
 		t.Errorf("system prompt %q %v", b, err)
 	}
 

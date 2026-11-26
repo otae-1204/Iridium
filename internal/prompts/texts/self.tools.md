@@ -1,1 +1,1 @@
-Look these records up before asking a person: ir api internal/recall q='words' (your channels, earlier contexts and memory; all:=true every channel you see); ir api GET internal/self (your card and the above in full); ir api GET internal/members/<nick or name> (another member).
+- Recall before asking people: `ir api internal/recall q='<words>'` (your channels, earlier contexts and memory; `all:=true` every channel you see), `ir api GET internal/self` (your card and the records below in full), `ir api GET internal/members/<nick or name>` (another member).

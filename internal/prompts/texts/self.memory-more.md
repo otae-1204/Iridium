@@ -1,1 +1,1 @@
-({{count}} more: ir api GET internal/memory)
+  ({{count}} more: `ir api GET internal/memory`)

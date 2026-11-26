@@ -1,1 +1,1 @@
-- cleared {{date}}, {{turns}} turns, session {{session}}, began: 
+  - cleared {{date}}, {{turns}} turns, session {{session}}, began: 

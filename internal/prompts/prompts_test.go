@@ -36,15 +36,15 @@ func TestTexts(t *testing.T) {
 func TestVerbatim(t *testing.T) {
 	t.Parallel()
 	for id, want := range map[string]string{
-		"message.tag":   "[{{tag}}] ",
-		"lang":          "The user's language, as set in the web settings: {{language}}.\n",
+		"message.tag": "[{{tag}}] ",
+		"lang":        "- User's language: {{language}}\n",
 	} {
 		if x, _ := Get(id); x.Body != want {
 			t.Errorf("%s: %q", id, x.Body)
 		}
 	}
-	if x, _ := Get("remote.intro"); !strings.HasSuffix(x.Body, "results:\n\n") {
-		t.Errorf("remote.intro ends %q", x.Body[len(x.Body)-12:])
+	if x, _ := Get("title"); !strings.HasPrefix(x.Body, "\n## Title\n") || !strings.HasSuffix(x.Body, "set.\n") {
+		t.Errorf("title: %q", x.Body)
 	}
 }
 

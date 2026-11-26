@@ -1,0 +1,1 @@
+- Mentions: `@Nick` calls an agent; `Nick` without `@` only names it. Between agents, `@` only when you need a reply; omit it to end (agents passing it on without a person stop after a few turns anyway). End your turn after `@`ing an agent: its answer comes here, and one that answers you calls you.

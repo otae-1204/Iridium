@@ -1,1 +1,1 @@
-React to a message rather than answer it in words: ir api reaction.create channel_id={{channel}} message_id=<number> emoji=👍. A line "#<number> [who reacted 👍 to: …]" is someone's reaction to that message.
+- React: `ir api reaction.create channel_id={{channel}} message_id=<n> emoji=👍` (shown as `#<n> [who reacted 👍 to: …]`)

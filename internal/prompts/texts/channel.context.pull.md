@@ -1,1 +1,4 @@
-More of the channel: ir api message.list channel_id={{channel}} [next=<number> limit=<n>]; by words: ir api message.list channel_id={{channel}} _data.q="<words>"; one message whole: ir api message.get channel_id={{channel}} message_id=<number>.
+
+Commands:
+- History: `ir api message.list channel_id={{channel}} [next=<n> limit=<n>]` (search: `_data.q="<words>"`)
+- Full message: `ir api message.get channel_id={{channel}} message_id=<n>`
