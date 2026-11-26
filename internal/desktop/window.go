@@ -1,12 +1,9 @@
 package desktop
 
 import (
-	"bytes"
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -14,7 +11,6 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
-	"github.com/kumoSleeping/iridium/internal/version"
 )
 
 // follow draws the tray again when what the runtime says changes (its joins' states, this
@@ -41,42 +37,32 @@ func (u *ui) follow() {
 	}
 }
 
-// binaryUpdates: the app updates as this computer's Iridium does (internal/update replaces the
-// one binary, and on macOS signs the app again); the window, still on the one it started with,
-// offers a restart once the binary on disk is another version. Looked at now and then.
-func (u *ui) binaryUpdates() {
-	for {
-		u.checkBinary()
-		time.Sleep(30 * time.Minute)
-	}
-}
-
-// checkBinary asks the binary on disk its version (iridium version).
-func (u *ui) checkBinary() {
-	self, err := os.Executable()
-	if err != nil {
-		return
-	}
-	if r, err := filepath.EvalSymlinks(self); err == nil {
-		self = r
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, self, "version")
-	quiet(cmd)
-	out, err := cmd.Output()
-	if err != nil {
-		return
-	}
-	v := strings.TrimSpace(strings.TrimPrefix(string(bytes.TrimSpace(out)), "iridium "))
+// updateChanged: what the app's update shows changed (selfupdate.go): the tray and the list drawn
+// again; the Iridiums' pages told only once one is ready or no longer is (they show nothing of a
+// download).
+func (u *ui) updateChanged() {
+	u.redraw()
+	ready := u.upd.view().Phase == "ready"
 	u.mu.Lock()
-	changed := v != "" && v != version.Version && v != u.ready
-	if changed {
-		u.ready = v
+	was := u.toldReady
+	u.toldReady = ready
+	type shown struct {
+		w      *mygo.Window
+		server string
+	}
+	var ws []shown
+	for _, w := range u.wins {
+		ws = append(ws, shown{w, u.shows[u.names[w]]})
 	}
 	u.mu.Unlock()
-	if changed {
-		u.redraw()
+	if ready == was {
+		return
+	}
+	c, _ := loadConfig()
+	for _, s := range ws {
+		if s.server != "" {
+			reply(s.w, u.hello(c, s.server))
+		}
 	}
 }
 

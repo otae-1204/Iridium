@@ -965,6 +965,7 @@ export const zh = {
   "app.allFoldersKey": "改为全部",
   "app.version": "版本 {v}",
   "app.check": "检查更新",
+  "app.update": "更新",
   "app.restartTo": "重启以更新到 {v}",
   "app.shown": "窗口中",
   "app.removeSure": "确认移除",

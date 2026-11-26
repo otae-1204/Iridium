@@ -2,9 +2,11 @@
 // the time beside it. With the sidebar shown, right of the name at its top (the user,
 // 2026-11-08); on a phone, in the chat's top bar left of ⋯ (2026-11-06). The daemon serving a
 // newer build than the page's (and the page not loading it by itself yet), in its place ↻ 刷新,
-// which loads it (2026-11-08).
-import { RotateCw } from "lucide-react";
+// which loads it (2026-11-08). In the desktop app, with its own update downloaded, in its place
+// 更新, which restarts the app on it (selfupdate.go, 2026-11-26).
+import { CircleArrowUp, RotateCw } from "lucide-react";
 import { t } from "./i18n";
+import { ask, useApp } from "./irapp";
 import { useLink } from "./store";
 import { cn, Tip } from "./ui";
 import { reloadServed, useStale } from "./upgrade";
@@ -12,6 +14,16 @@ import { reloadServed, useStale } from "./upgrade";
 export function LinkDot({ className, side = "bottom" }: { className?: string; side?: "top" | "bottom" }) {
   const link = useLink();
   const stale = useStale();
+  const update = useApp()?.update;
+  if (update && !stale && link.live !== false)
+    return (
+      <Tip label={t("app.restartTo", { v: update })} side={side}>
+        <button type="button" onClick={() => ask("update", "restart")} className={cn("g-pop g-press flex items-center gap-1 rounded-md px-1.5 text-xs font-medium text-ink-2 hover:text-ink", className)}>
+          <CircleArrowUp size={11} aria-hidden />
+          {t("app.update")}
+        </button>
+      </Tip>
+    );
   if (stale && link.live !== false)
     return (
       <Tip label={t("top.reloadHint")} side={side}>
