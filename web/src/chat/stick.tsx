@@ -1,5 +1,6 @@
 // What scrolls as a chat does (docs/动画.md): it opens at its newest, or where it was left. At its
-// newest (following), whatever comes moves only the scroll place, eased to the end; scrolled up,
+// newest (following), whatever comes moves only the scroll place, eased to the end (a change over
+// the last row, at once: the last row stays where it is); scrolled up,
 // nothing seen moves (the browser's scroll anchoring, or the page's own where there is none), and
 // what comes below shows a key to go down. Whether it follows is the reader's alone: going up by
 // wheel, finger, key or scrollbar lets go, coming back to the end takes it again; nothing this
@@ -85,6 +86,21 @@ const offNow = (m: Mark, col: Element) => {
   return el && el.getBoundingClientRect().top - col.getBoundingClientRect().top;
 };
 
+/** The conversation's last row (the column's last child: a run, a bubble) and where it begins in
+ *  the column: what changes height over it is not at the end. */
+type Foot = { el: Element; at: number; top?: number };
+const offIn = (el: Element, col: Element) => el.getBoundingClientRect().top - col.getBoundingClientRect().top;
+const footOf = (col: Element | null): Foot | null => {
+  const el = col?.lastElementChild;
+  return el ? { el, at: offIn(el, col) } : null;
+};
+/** Following, how far a change over the row that was last moved it (at: where it begins now, null
+ *  gone): that much the scroll goes at once, not eased, so the rows at the end stay where they are;
+ *  eased, they went down with each line written over them and came back up, again and again (an
+ *  agent streaming over others working under it, kumo, 2026-11-26). What came after it is left to
+ *  the follow, eased as before. */
+export const overFoot = (was: Foot | null, at: number | null) => (was && at !== null && Math.abs(at - was.at) > 0.5 ? at - was.at : 0);
+
 /** tail: changes as the conversation grows at its end. quiet: no key to go down (an ask under
  *  it). draw: draws the page now (the page before, once older brought it). */
 export function Stick({ tail, older, draw, place, style, children, scroller, bottom, quiet, openAt, late, onFollow }: { tail: unknown; older: () => Promise<boolean>; draw: () => void; place: { top: number | null; opened?: boolean }; openAt?: number; late?: number; onFollow?: (on: boolean) => void; style?: CSSProperties; children: ReactNode; scroller?: RefObject<HTMLDivElement | null>; bottom: number; quiet?: boolean }) {
@@ -94,14 +110,26 @@ export function Stick({ tail, older, draw, place, style, children, scroller, bot
   const [, redraw] = useState(0);
   // following: the reader's; left: px to the end as this last put it; ours: where this put the
   // scroll (to the part of a px); mark: without the browser's anchoring, the top row and its place.
-  const s = useRef({ following: place.top === null, frame: 0, last: 0, ours: -1, left: 0, pane: 0, drawn: false, tail: undefined as unknown, paging: false, drag: false, native: true, mark: null as Mark | null, hand: -Infinity, sentAt: -Infinity }).current;
+  const s = useRef({ following: place.top === null, frame: 0, last: 0, ours: -1, left: 0, pane: 0, drawn: false, tail: undefined as unknown, paging: false, drag: false, native: true, mark: null as Mark | null, foot: null as Foot | null, hand: -Infinity, sentAt: -Infinity }).current;
 
   const maxOf = (el: HTMLElement) => el.scrollHeight - el.clientHeight;
   const hands = () => s.drag || performance.now() - s.hand < HAND;
   const atFoot = (el: HTMLElement) => maxOf(el) - el.scrollTop < 2;
-  const put = (el: HTMLElement, top: number) => ((el.scrollTop = top), (s.ours = top));
+  const put = (el: HTMLElement, top: number) => ((el.scrollTop = top), (s.ours = top), s.foot && (s.foot.top = el.scrollTop));
   /** Px still to go to the end: from where this put it, unless something else moved it since. */
   const leftOf = (el: HTMLElement) => maxOf(el) - (Math.abs(el.scrollTop - s.ours) <= 1 ? s.ours : el.scrollTop);
+  /** Following: what changed height over the last row moved it by as much as the scroll, at once. */
+  const under = (el: HTMLElement) => {
+    const col = el.firstElementChild, was = s.foot;
+    const d = s.following && col && was?.el.parentElement === col ? overFoot(was, offIn(was.el, col)) : 0;
+    s.foot = footOf(col);
+    if (s.foot) s.foot.top = el.scrollTop;
+    if (!d) return;
+    // Shorter over it at the very end, the browser has put the scroll back as far already.
+    const from = was!.top !== undefined && was!.top > el.scrollTop && maxOf(el) - el.scrollTop < 1 ? was!.top : el.scrollTop;
+    moveLog("stick.under", "over the last row", { dy: -Math.round(d) });
+    put(el, from + d);
+  };
   const mark = (el: HTMLElement) => void (s.mark = s.native || !el.firstElementChild ? null : topRow(el, el.firstElementChild));
   /** Without the browser's anchoring: what changed over the row at the top moves it nowhere. */
   const keep = (el: HTMLElement) => {
@@ -120,6 +148,7 @@ export function Stick({ tail, older, draw, place, style, children, scroller, bot
     const el = list.current;
     if (!el || !s.following) return;
     keep(el);
+    under(el);
     // By the time it is drawn at, at most two frames' worth after the page was busy: the way left
     // is gone on with, not jumped.
     const now = performance.now();
@@ -174,6 +203,8 @@ export function Stick({ tail, older, draw, place, style, children, scroller, bot
         el.style.overflowAnchor = way;
         moveLog("stick.back", "page", { dy: 0, note: `${Math.round(d)}px over` });
         mark(el);
+        // The page before is over the last row too, and kept for already.
+        s.foot = footOf(col);
       }
     } finally {
       s.paging = false;
@@ -219,7 +250,8 @@ export function Stick({ tail, older, draw, place, style, children, scroller, bot
     // pane itself another height (the keyboard, the window): at the end at once.
     const ro = new ResizeObserver(() => {
       keep(el);
-        const pane = el.clientHeight !== s.pane;
+      under(el);
+      const pane = el.clientHeight !== s.pane;
       s.pane = el.clientHeight;
       // Something in it draws its own change of height (a list of steps opening, words folding,
       // the room under it for the composer): the end stays where it is each frame, so what is under
