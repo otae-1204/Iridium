@@ -815,7 +815,7 @@ export const zh = {
   "apps.save": "保存",
   "apps.reset": "还原",
   "apps.saved": "已保存",
-  "term.panel": "网页",
+  "term.panel": "Ir-Web",
   "term.channel": "应用",
   "term.local": "Iridium",
   "term.this": "当前",

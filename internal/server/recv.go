@@ -25,7 +25,7 @@ func (s *Server) senderWords(e string, zh bool) string {
 	case strings.HasPrefix(e, scriptMemberPrefix):
 		return "「" + strings.TrimPrefix(e, scriptMemberPrefix) + "」"
 	case e == channel.AppMember(api.WebApp):
-		return cond(zh, "网页", "the panel")
+		return "Ir-Web"
 	case e == channel.AppMember(gate.HostID):
 		return "Iridium"
 	case strings.HasSuffix(e, "/*"):

@@ -162,7 +162,8 @@ func (s *Server) apps(w http.ResponseWriter, r *http.Request) {
 	h := s.appOf(host)
 	h.Computer = s.hostComputer()
 	out.Apps = append(out.Apps, h)
-	web := api.App{ID: gate.WebApp, Name: gate.WebApp, Web: true, Rules: access.Default()}
+	// Ir-Web wears the host's face (kumo, 2026-11-26): the same Iridium, through a browser.
+	web := api.App{ID: gate.WebApp, Name: gate.WebApp, Web: true, Avatar: h.Avatar, Rules: access.Default()}
 	var apps []api.App
 	for _, e := range a.Endpoints {
 		if e.Kind == gate.KindPanel {
