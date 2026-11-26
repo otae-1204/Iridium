@@ -634,7 +634,7 @@ function Empty({ below, onSheet, onMe, onSide }: { below: number; onSheet?: () =
         {onSheet && <LinkDot className="mr-auto shrink-0" />}
         {/* A computer's with the sidebar shut: its head's, in a phone's order (kumo, 2026-11-26). */}
         {onSide && (
-          <div className="g-fade mr-auto ml-4 flex min-w-0 items-center gap-2.5">
+          <div className="mr-auto ml-4 flex min-w-0 items-center gap-2">
             <SideKey label={t("nav.unshut")} onClick={onSide} />
             <AppName />
             <LinkDot className="shrink-0" />

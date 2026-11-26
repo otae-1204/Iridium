@@ -242,16 +242,9 @@ const Bar = memo(function Bar({ s, onSheet, onMe, onSide, onBack, recordOnly }: 
                   <IrMark size={18} className="text-ink" />
                 </button>
               )}
-              {/* A computer's with the sidebar shut (kumo, 2026-11-26): [Ir] as on a phone, opening
-                  it. Its room slides open as the sidebar folds, the face and the name gliding
-                  over; its trailing room takes the gap after it, none left while it is shut. */}
-              {!onSheet && !onBack && (
-                <span inert={!onSide || undefined} className={cn("-mr-2.5 grid transition-[grid-template-columns,opacity] duration-(--move) ease-(--ease-out)", onSide ? "grid-cols-[1fr]" : "grid-cols-[0fr] opacity-0")}>
-                  <span className="min-w-0 overflow-clip pr-2.5 [overflow-clip-margin:8px]">
-                    <SideKey label={t("nav.unshut")} onClick={onSide} />
-                  </span>
-                </span>
-              )}
+              {/* A computer's with the sidebar shut (kumo, 2026-11-26): [Ir] as on a phone, where the
+                  sidebar's head has it (both 16px in, a 48px strip), so it stays put as it is pressed. */}
+              {!onSheet && !onBack && onSide && <SideKey label={t("nav.unshut")} onClick={onSide} />}
               <Tip label={stack ? stack.map((a) => a.nick).join(" · ") : `${agentName(solo?.agent ?? s.agent)} · ${sessionStatusText(s)}`} side="bottom">
                 <FaceKey s={s} stack={stack} solo={solo} className={late} />
               </Tip>
@@ -270,7 +263,7 @@ const Bar = memo(function Bar({ s, onSheet, onMe, onSide, onBack, recordOnly }: 
               out of the name's room, the keys at the right staying where they are. */}
           {onSheet && <LinkDot className="shrink-0" />}
           {onSide && (
-            <span className="g-fade flex shrink-0">
+            <span className="flex shrink-0">
               <LinkDot className="shrink-0" />
             </span>
           )}
