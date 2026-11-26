@@ -13,13 +13,13 @@ import { Menu } from "@base-ui/react/menu";
 import { Bot, ListChecks, Square, SquareTerminal } from "lucide-react";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { api } from "../../api/client";
-import type { Session, SessionState } from "../../api/types.gen";
+import type { Session, SessionState, Status } from "../../api/types.gen";
 import { t } from "../../i18n";
 import { openRecord } from "../../route";
 import { useList } from "../../store";
 import { working } from "../../tree";
 import { errText, toast } from "../../toast";
-import { cn, MenuPortal, PHONE, Tip, useMedia } from "../../ui";
+import { cn, Lamp, MenuPortal, PHONE, Tip, useMedia } from "../../ui";
 import { stopTurn } from "../live";
 import { subName } from "../subwork";
 import { MemberFace } from "./face";
@@ -113,13 +113,17 @@ export function WorkKey({ id }: { id: string }) {
             <button type="button" aria-label={`${label} ${ws.length}`} className="g-fade g-press flex h-8 items-center gap-1 rounded-md px-2 text-ink-2 hover:bg-fill hover:text-ink data-popup-open:bg-fill pointer-coarse:h-10">
               <span className="flex items-center">
                 {faces.map((w, i) => (
-                  <span key={w.a.session} className="grid rounded-full ring-2 ring-paper" style={{ marginLeft: i ? -5 : 0, zIndex: 3 - i }}>
+                  <span key={w.a.session} className="relative grid rounded-full ring-2 ring-paper" style={{ marginLeft: i ? -5 : 0, zIndex: 3 - i }}>
                     <MemberFace member={w.a.member} agent={w.a.agent} size={18} />
+                    {/* Its lamp on the face's lower right, as a face's anywhere (kumo, 2026-11-26: not
+                        after the count, not grey): its turn's status; only background, at work. */}
+                    <span className="absolute -right-0.5 -bottom-0.5 grid scale-75 rounded-full bg-paper p-px">
+                      <Lamp status={w.phase === "reply" ? (w.a.status as Status) : "running"} />
+                    </span>
                   </span>
                 ))}
               </span>
               <span className="text-xs tabular-nums">{ws.length}</span>
-              <span aria-hidden className="wk-dot" />
             </button>
           }
         />

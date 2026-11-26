@@ -456,17 +456,8 @@ body {
   background: var(--compact);
   animation: row-breathe 2s ease-in-out infinite;
 }
-/* The work key's dot (chat/channel/workkey.tsx): tiny, very faint, neutral, breathing slowly; no
-   green, nothing turning (kumo + Neon, 2026-11-26). The link's signal not measured yet breathes the
-   same way (link.tsx). Only opacity moves; still where motion is reduced. */
-.wk-dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--ink-3);
-  opacity: 0.45;
-  animation: wk-breathe 2.8s ease-in-out infinite;
-}
+/* The link's signal not measured yet (link.tsx): faint, breathing slowly. Only opacity moves;
+   still where motion is reduced. */
 .sig-wait {
   animation: wk-breathe 2.8s ease-in-out infinite;
 }
@@ -480,7 +471,6 @@ body {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .wk-dot,
   .sig-wait {
     animation: none;
   }
