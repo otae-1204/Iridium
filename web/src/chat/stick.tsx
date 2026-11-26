@@ -30,6 +30,35 @@ const near = (el: HTMLElement) => Math.max(600, el.clientHeight * 2);
  *  anchoring: Chromium, Firefox, Safari 27 on). ?noanchor=1 tries the page's own way. */
 const anchors = () => typeof CSS !== "undefined" && CSS.supports("overflow-anchor", "auto") && !/[?&]noanchor=1/.test(location.search);
 
+/** Where a chat was left up from its end, kept in this browser by a key (a channel's id) for the
+ *  page loaded again (kumo, 2026-11-26: reloaded, it was at its end, or glided there): the row at
+ *  the top of what was seen, by its number, and how far under the pane's top its top was. At its
+ *  end, nothing kept: it opens at its end (or at the last read). The newest LEFT_MAX kept. */
+type Left = { seq: string; off: number; at: number };
+const LEFT_KEY = "ir:left1";
+const LEFT_MAX = 64;
+const lefts = (): Record<string, Left> => {
+  try {
+    return JSON.parse(localStorage.getItem(LEFT_KEY) ?? "{}") as Record<string, Left>;
+  } catch {
+    return {};
+  }
+};
+export const leftAt = (key: string): Left | undefined => lefts()[key];
+export function keepLeft(key: string, left: Left | null) {
+  const all = lefts();
+  if (left) all[key] = left;
+  else if (all[key]) delete all[key];
+  else return;
+  const keys = Object.keys(all).sort((a, b) => all[b]!.at - all[a]!.at);
+  for (const k of keys.slice(LEFT_MAX)) delete all[k];
+  try {
+    localStorage.setItem(LEFT_KEY, JSON.stringify(all));
+  } catch {
+    // A full or closed store: not kept.
+  }
+}
+
 type Chat = { toEnd(): void; letGo(): void; rests(): boolean; down(by: number): void };
 const chats = new WeakMap<HTMLElement, Chat>();
 /** A message sent from here: the chat follows again, to its end. */
@@ -86,15 +115,18 @@ const offNow = (m: Mark, col: Element) => {
 };
 
 /** tail: changes as the conversation grows at its end. quiet: no key to go down (an ask under
- *  it). draw: draws the page now (the page before, once older brought it). */
-export function Stick({ tail, older, draw, place, style, children, scroller, bottom, quiet, openAt, late, onFollow }: { tail: unknown; older: () => Promise<boolean>; draw: () => void; place: { top: number | null; opened?: boolean }; openAt?: number; late?: number; onFollow?: (on: boolean) => void; style?: CSSProperties; children: ReactNode; scroller?: RefObject<HTMLDivElement | null>; bottom: number; quiet?: boolean }) {
+ *  it). draw: draws the page now (the page before, once older brought it). keep: where it is
+ *  left is kept in this browser under it, and opened at again as the page is loaded anew. */
+export function Stick({ tail, older, draw, place, style, children, scroller, bottom, quiet, openAt, late, onFollow, keep: keepKey }: { keep?: string; tail: unknown; older: () => Promise<boolean>; draw: () => void; place: { top: number | null; opened?: boolean }; openAt?: number; late?: number; onFollow?: (on: boolean) => void; style?: CSSProperties; children: ReactNode; scroller?: RefObject<HTMLDivElement | null>; bottom: number; quiet?: boolean }) {
   const own = useRef<HTMLDivElement>(null);
   const list = scroller ?? own;
   const [fresh, setFresh] = useState(false);
   const [, redraw] = useState(0);
   // following: the reader's; left: px to the end as this last put it; ours: where this put the
   // scroll (to the part of a px); mark: without the browser's anchoring, the top row and its place.
-  const s = useRef({ following: place.top === null, frame: 0, last: 0, ours: -1, left: 0, pane: 0, drawn: false, tail: undefined as unknown, paging: false, drag: false, native: true, mark: null as Mark | null, hand: -Infinity, sentAt: -Infinity }).current;
+  // Loaded anew (nothing held for it in this page yet): where this browser had it left.
+  const [stored] = useState(() => (keepKey && place.top === null && !place.opened ? leftAt(keepKey) : undefined));
+  const s = useRef({ following: place.top === null && !stored, frame: 0, last: 0, ours: -1, left: 0, pane: 0, drawn: false, tail: undefined as unknown, paging: false, drag: false, native: true, mark: null as Mark | null, hand: -Infinity, sentAt: -Infinity }).current;
 
   const maxOf = (el: HTMLElement) => el.scrollHeight - el.clientHeight;
   const hands = () => s.drag || performance.now() - s.hand < HAND;
@@ -155,6 +187,17 @@ export function Stick({ tail, older, draw, place, style, children, scroller, bot
     run();
   };
 
+  /** Where it is left, kept for the page loaded anew (keep): nothing at its end; nothing while
+   *  none of its rows is drawn (the first screen held back), which would forget it. */
+  const saveLeft = () => {
+    const el = list.current;
+    if (!keepKey || !el || !el.querySelector("[data-seq]")) return;
+    if (s.following || atFoot(el)) return keepLeft(keepKey, null);
+    const m = el.firstElementChild && topRow(el, el.firstElementChild);
+    if (m?.seq) keepLeft(keepKey, { seq: m.seq, off: m.el.getBoundingClientRect().top - el.getBoundingClientRect().top, at: Date.now() });
+  };
+  const saving = useRef(0);
+
   const back = async () => {
     const el = list.current;
     if (!el || s.paging) return;
@@ -190,11 +233,21 @@ export function Stick({ tail, older, draw, place, style, children, scroller, bot
       // First opened with messages not read yet (kumo, 2026-11-26): at the last one read, its
       // foot at the pane's, as it was left; not at the newest.
       const first = !place.opened && !!el.querySelector("[data-seq]");
+      const kept = first && stored ? el.querySelector<HTMLElement>(`[data-seq="${stored.seq}"]`) : null;
       let row: HTMLElement | null = null;
       if (first && s.following && openAt !== undefined) for (let n = openAt; !row && n > openAt - 4 && n > 0; n--) row = el.querySelector<HTMLElement>(`[data-seq="${n}"]`);
       if (first) place.opened = true;
       const to = row ? row.getBoundingClientRect().bottom - el.getBoundingClientRect().top + el.scrollTop - (el.clientHeight - parseFloat(getComputedStyle(el).paddingBottom || "0")) + 16 : Infinity;
-      if (row && to < maxOf(el) - 48) (put(el, Math.max(0, to)), stay("unread"));
+      if (kept) {
+        // Where it was left, its row as far under the pane's top as it was; the reader's to scroll.
+        put(el, Math.min(maxOf(el), Math.max(0, el.scrollTop + kept.getBoundingClientRect().top - el.getBoundingClientRect().top - stored!.off)));
+        if (atFoot(el)) follow();
+        else ((s.following = false), told.current?.(false));
+      } else if (first && stored) {
+        // Its row not here (gone, or older than the page has): at the end, as any.
+        if (!s.following) follow();
+        put(el, maxOf(el));
+      } else if (row && to < maxOf(el) - 48) (put(el, Math.max(0, to)), stay("unread"));
       else if (s.following) put(el, maxOf(el));
       else el.scrollTop = place.top!;
     } else if (s.following && late !== lateWas.current) stay("late");
@@ -254,7 +307,14 @@ export function Stick({ tail, older, draw, place, style, children, scroller, bot
     const lift = () => void (s.drag = false);
     const on: [EventTarget, string, (e: never) => void][] = [[el, "wheel", wheel], [el, "touchstart", touch], [el, "touchmove", touch], [el, "keydown", key], [el, "pointerdown", press], [window, "pointerup", lift], [window, "pointercancel", lift]];
     for (const [at, k, f] of on) at.addEventListener(k, f as EventListener, { passive: true, capture: at === window });
+    const hide = () => document.visibilityState === "hidden" && saveLeft();
+    window.addEventListener("pagehide", saveLeft);
+    document.addEventListener("visibilitychange", hide);
     return () => {
+      clearTimeout(saving.current);
+      saveLeft();
+      window.removeEventListener("pagehide", saveLeft);
+      document.removeEventListener("visibilitychange", hide);
       ro.disconnect();
       stop();
       for (const [at, k, f] of on) at.removeEventListener(k, f as EventListener, { capture: at === window });
@@ -288,6 +348,7 @@ export function Stick({ tail, older, draw, place, style, children, scroller, bot
     mark(el);
     // Following, it is at its end (gone up, it lets go first): nothing read for the page before.
     if (!s.following) void back().catch(() => {});
+    if (keepKey && !saving.current) saving.current = window.setTimeout(() => ((saving.current = 0), saveLeft()), 250);
   };
 
   return (
