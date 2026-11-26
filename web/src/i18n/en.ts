@@ -11,6 +11,8 @@ export const en: Dict = {
   "nav.close": "Close",
   "nav.sidebar": "Session list",
   "nav.me": "Settings",
+  "nav.shut": "Collapse sidebar",
+  "nav.unshut": "Expand sidebar",
   "nav.resize": "Drag to resize the session list (double-click to reset)",
   "nav.sessions": "Sessions",
   "nav.more": "{n} more",

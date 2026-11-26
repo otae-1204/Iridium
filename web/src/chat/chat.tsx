@@ -18,7 +18,7 @@ import { LOCAL_ME, useMachines, useMe, useWhoList, useWorkspaces } from "../data
 import { t, useLang } from "../i18n";
 import { LinkDot } from "../link";
 import { back as goBack, go, openChat, openRecord, openUsage } from "../route";
-import { MenuItems, Rename, sessionActions, sessionTags } from "../sidebar";
+import { MenuItems, Rename, sessionActions, sessionTags, SideKey } from "../sidebar";
 import { useList, useSession } from "../store";
 import { drafts, opened } from "../stream";
 import { groupPath } from "../tree";
@@ -57,13 +57,13 @@ const renamesDraft = (d: Drafted) => !!d.tool && renameOnly({ name: d.tool.name,
 
 /** sheet: on a phone, the sidebar's sheet is out this tall (sheet.tsx): the bottom stack sinks out
  *  under it. record: true opens the read-only TranscriptView for this session. */
-export function ChatPage({ id, record, sheet = 0, onSheet, onMe }: { id: string; record?: boolean; sheet?: number; onSheet?: () => void; onMe?: () => void }) {
+export function ChatPage({ id, record, sheet = 0, onSheet, onMe, onSide }: { id: string; record?: boolean; sheet?: number; onSheet?: () => void; onMe?: () => void; onSide?: () => void }) {
   const list = useList();
   const row = list?.find((x) => x.id === id);
   const real = useSession(id);
   const s = real ?? row;
   if (record || s?.subagent || s?.status === "elsewhere") {
-    return <TranscriptView key="record" id={id} sheet={sheet} onSheet={onSheet} onMe={onMe} onBack={record ? goBack : undefined} />;
+    return <TranscriptView key="record" id={id} sheet={sheet} onSheet={onSheet} onMe={onMe} onSide={onSide} onBack={record ? goBack : undefined} />;
   }
   return (
     <ChannelPage
@@ -71,14 +71,14 @@ export function ChatPage({ id, record, sheet = 0, onSheet, onMe }: { id: string;
       id={id}
       sheet={sheet}
       record={openRecord}
-      bar={(cur) => <Bar s={cur} onSheet={onSheet} onMe={onMe} />}
+      bar={(cur) => <Bar s={cur} onSheet={onSheet} onMe={onMe} onSide={onSide} />}
     />
   );
 }
 
 /** Minimal read-only transcript viewer for subagents, external (elsewhere) sessions, and inspecting
  *  an agent's raw session record (?record=1). Never touches channelLog or merging. */
-function TranscriptView({ id, sheet = 0, onSheet, onMe, onBack }: { id: string; sheet?: number; onSheet?: () => void; onMe?: () => void; onBack?: () => void }) {
+function TranscriptView({ id, sheet = 0, onSheet, onMe, onSide, onBack }: { id: string; sheet?: number; onSheet?: () => void; onMe?: () => void; onSide?: () => void; onBack?: () => void }) {
   useLang();
   const list = useList();
   const row = list?.find((x) => x.id === id);
@@ -146,7 +146,7 @@ function TranscriptView({ id, sheet = 0, onSheet, onMe, onBack }: { id: string; 
     const gone = lost && list !== undefined && !row;
     return (
       <div className="relative h-full">
-        <Bar s={row} onSheet={onSheet} onMe={onMe} onBack={onBack} recordOnly />
+        <Bar s={row} onSheet={onSheet} onMe={onMe} onSide={onSide} onBack={onBack} recordOnly />
         {gone && <p className="g-fade m-0 pt-24 text-center text-sm text-ink-3">{t("chat.gone")}</p>}
       </div>
     );
@@ -184,7 +184,7 @@ function TranscriptView({ id, sheet = 0, onSheet, onMe, onBack }: { id: string; 
           {s.status === "error" && s.error && <Crash error={s.error} />}
         </div>
       </Stick>
-      <Bar s={s} onSheet={onSheet} onMe={onMe} onBack={onBack} recordOnly />
+      <Bar s={s} onSheet={onSheet} onMe={onMe} onSide={onSide} onBack={onBack} recordOnly />
       {hasFooter && (
         <div inert={sheet > 0} className="g-turn-stay g-sink vt-stack absolute inset-x-0 bottom-0 z-10 px-2.5 pb-[max(14px,calc(env(safe-area-inset-bottom)+6px))] sm:px-5">
           <div className="relative mx-auto max-w-(--chat-w)">
@@ -209,7 +209,7 @@ function TranscriptView({ id, sheet = 0, onSheet, onMe, onBack }: { id: string; 
 
 /** The top bar: optional back button (TranscriptView), the channel/agent face, the name, members
  *  and more. */
-const Bar = memo(function Bar({ s, onSheet, onMe, onBack, recordOnly }: { s?: Session; onSheet?: () => void; onMe?: () => void; onBack?: () => void; recordOnly?: boolean }) {
+const Bar = memo(function Bar({ s, onSheet, onMe, onSide, onBack, recordOnly }: { s?: Session; onSheet?: () => void; onMe?: () => void; onSide?: () => void; onBack?: () => void; recordOnly?: boolean }) {
   const list = useList();
   const of = s && (list?.find((x) => x.id === s.id) ?? s);
   const stack = s && of && isMulti(of) ? of.agents!.map((a) => ({ id: a.session, nick: a.nick, agent: list?.find((x) => x.id === a.session)?.agent ?? a.agent ?? s.agent })) : undefined;
@@ -242,6 +242,16 @@ const Bar = memo(function Bar({ s, onSheet, onMe, onBack, recordOnly }: { s?: Se
                   <IrMark size={18} className="text-ink" />
                 </button>
               )}
+              {/* A computer's with the sidebar shut (kumo, 2026-11-26): [Ir] as on a phone, opening
+                  it. Its room slides open as the sidebar folds, the face and the name gliding
+                  over; its trailing room takes the gap after it, none left while it is shut. */}
+              {!onSheet && !onBack && (
+                <span inert={!onSide || undefined} className={cn("-mr-2.5 grid transition-[grid-template-columns,opacity] duration-(--move) ease-(--ease-out)", onSide ? "grid-cols-[1fr]" : "grid-cols-[0fr] opacity-0")}>
+                  <span className="min-w-0 overflow-clip pr-2.5 [overflow-clip-margin:8px]">
+                    <SideKey label={t("nav.unshut")} onClick={onSide} />
+                  </span>
+                </span>
+              )}
               <Tip label={stack ? stack.map((a) => a.nick).join(" · ") : `${agentName(solo?.agent ?? s.agent)} · ${sessionStatusText(s)}`} side="bottom">
                 <FaceKey s={s} stack={stack} solo={solo} className={late} />
               </Tip>
@@ -259,6 +269,11 @@ const Bar = memo(function Bar({ s, onSheet, onMe, onBack, recordOnly }: { s?: Se
           {/* A phone's link, after the name (kumo, 2026-11-25): its round trip grows and shrinks
               out of the name's room, the keys at the right staying where they are. */}
           {onSheet && <LinkDot className="shrink-0" />}
+          {onSide && (
+            <span className="g-fade flex shrink-0">
+              <LinkDot className="shrink-0" />
+            </span>
+          )}
         </div>
         {s && !recordOnly && (
           <Suspense fallback={null}>

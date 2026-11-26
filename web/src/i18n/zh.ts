@@ -11,6 +11,8 @@ export const zh = {
   "nav.close": "关闭",
   "nav.sidebar": "会话列表",
   "nav.me": "设置",
+  "nav.shut": "收起侧边栏",
+  "nav.unshut": "展开侧边栏",
   "nav.resize": "拖动调整会话列表宽度（双击复原）",
   "nav.sessions": "会话",
   "nav.more": "还有 {n} 个",

@@ -78,6 +78,9 @@ type Props = {
   noFoot?: boolean;
   /** On a phone: the sheet brought out, a place shown in it (openPlace). */
   reveal?: () => void;
+  /** On a computer, folded away to the left (sideshut.ts); onShut: its [Ir] pressed. */
+  shut?: boolean;
+  onShut?: () => void;
 };
 
 /** How wide the sidebar may be dragged, and at first: freely, to 640px or 60% of the window (the
@@ -147,7 +150,20 @@ export function Sidebar(p: Props) {
   saidNow = useSaidLine();
   const list = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(() => clampWidth(Number(kept(WIDTH_KEY)) || WIDTH.start));
-  useLayoutEffect(() => void document.documentElement.style.setProperty("--sidebar-w", `${p.phone ? 0 : width}px`), [width, p.phone]);
+  useLayoutEffect(() => void document.documentElement.style.setProperty("--sidebar-w", `${p.phone || p.shut ? 0 : width}px`), [width, p.phone, p.shut]);
+  // Shut or opened: its box's width slides, the list inside keeping its own width (no rewrapping
+  // as it goes); only then, not as it is dragged.
+  const [wasShut, setWasShut] = useState(p.shut);
+  const [sliding, setSliding] = useState(false);
+  if (wasShut !== p.shut) {
+    setWasShut(p.shut);
+    setSliding(true);
+  }
+  useEffect(() => {
+    if (!sliding) return;
+    const t = setTimeout(() => setSliding(false), 1000);
+    return () => clearTimeout(t);
+  }, [sliding]);
   const [plusOpen, setPlusOpen] = useState<string | null>(null);
   // A confirmation an agent's ir asked for lights its session's lamp; one of no session listed
   // here is a row of its own at the top (no 需要你 group: the user, 2026-11-08). The sessions a
@@ -440,7 +456,7 @@ export function Sidebar(p: Props) {
       {/* The name at the left, the keys at the right (the user, 2026-11-06); no switch of machines
           (the user, 2026-11-10: a group at another is listed as a session is opened there). */}
       <div className="flex min-w-0 flex-1 items-center gap-2 pl-2">
-        <IrMark size={18} className="text-ink" />
+        {p.onShut ? <SideKey label={t("nav.shut")} onClick={p.onShut} /> : <IrMark size={18} className="text-ink" />}
         {/* In the app, the name this Iridium goes by there, pressed to change (appkey.tsx). */}
         <AppName />
         {/* The link's dot and latency, by the name (the user, 2026-11-08). */}
@@ -450,7 +466,7 @@ export function Sidebar(p: Props) {
     </div>
   );
 
-  return (
+  const aside = (
     <aside className={cn("relative flex h-full flex-col select-none [-webkit-touch-callout:none]", p.phone ? "w-full" : "shrink-0")} style={p.phone ? undefined : { width }}>
       {!p.phone && <Divider width={width} setWidth={setWidth} />}
       {head}
@@ -527,6 +543,28 @@ export function Sidebar(p: Props) {
       </div>
       {!p.noFoot && <Foot me={p.me} />}
     </aside>
+  );
+  if (p.phone) return aside;
+  return (
+    <div
+      inert={p.shut || undefined}
+      onTransitionEnd={(e) => e.target === e.currentTarget && setSliding(false)}
+      className={cn("relative h-full shrink-0", (p.shut || sliding) && "overflow-hidden", sliding && "transition-[width] duration-(--move) ease-(--ease-out)")}
+      style={{ width: p.shut ? 0 : width }}
+    >
+      {aside}
+    </div>
+  );
+}
+
+/** [Ir], pressed to shut the sidebar (its head) or open it again (the main pane's top bar). */
+export function SideKey({ label, onClick, className }: { label: string; onClick?: () => void; className?: string }) {
+  return (
+    <Tip label={label} side="bottom">
+      <button type="button" aria-label={label} onClick={onClick} className={cn("g-press -m-2 grid shrink-0 place-items-center rounded-md p-2 hover:bg-fill", className)}>
+        <IrMark size={18} className="text-ink" />
+      </button>
+    </Tip>
   );
 }
 

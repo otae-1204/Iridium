@@ -78,20 +78,16 @@ export function WinKeys({ className }: { className?: string }) {
 
 /** The name at the sidebar's top left: Iridium, or in the app the name this Iridium goes by in it
  *  (its windows' titles, the task bar's; kumo, 2026-11-22: one person, several Iridiums, a window
- *  each). Pressed, it is a field; the app's alone, the Iridium knows nothing of it. */
+ *  each). Pressed, home (kumo, 2026-11-26); in the app, a right click makes it a field, the app's
+ *  alone: the Iridium knows nothing of it. */
 export function AppName() {
   const app = useApp();
   const [editing, setEditing] = useState(false);
   const done = useRef(false);
-  const name = app?.title || "Iridium";
   // An app from before (no os in its hello) takes no name: the mark's name, as in a browser.
-  if (!app?.os)
-    return (
-      <span className="truncate text-base font-semibold tracking-[-0.01em]">
-        Iridium
-      </span>
-    );
-  if (editing) {
+  const named = !!app?.os;
+  const name = (named && app.title) || "Iridium";
+  if (named && editing) {
     const end = (v?: string) => {
       if (done.current) return;
       done.current = true;
@@ -121,8 +117,16 @@ export function AppName() {
   return (
     <button
       type="button"
-      aria-label={t("app.rename")}
-      onClick={() => ((done.current = false), setEditing(true))}
+      onClick={() => go({ name: "home" })}
+      onContextMenu={
+        named
+          ? (e) => {
+              e.preventDefault();
+              done.current = false;
+              setEditing(true);
+            }
+          : undefined
+      }
       className="-mx-1.5 min-w-0 truncate rounded-sm px-1.5 py-0.5 text-left text-base font-semibold tracking-[-0.01em] hover:bg-fill"
     >
       {name}

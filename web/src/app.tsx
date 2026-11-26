@@ -6,7 +6,7 @@
 // the chat staying under it; on a phone a sheet too, by a swipe up from the left quarter or ⋯. The jump box
 // (⌘K) opens in the sidebar, not over the page. The chat, the settings and the jump box come only as
 // they are opened, or the page is idle: the first screen stays light.
-import { AppKey, AppTell, WinKeys } from "./appkey";
+import { AppKey, AppName, AppTell, WinKeys } from "./appkey";
 import { Dialog } from "@base-ui/react/dialog";
 import { Menu } from "@base-ui/react/menu";
 import { Toast } from "@base-ui/react/toast";
@@ -32,7 +32,8 @@ import { back as stepBack, close, go, onTurn, openChat, openUsage, over, quietDi
 import { Pager, TABS_H } from "./pager";
 import { atLeft, GRIP, PULL, Sheet } from "./sheet";
 import { LinkDot } from "./link";
-import { HeadKeys, MenuItems, Sidebar } from "./sidebar";
+import { HeadKeys, MenuItems, SideKey, Sidebar } from "./sidebar";
+import { keepShut, shutKept } from "./sideshut";
 import { useConfirms, useList } from "./store";
 import { follow, opened } from "./stream";
 import { ToastList, toasts } from "./toast";
@@ -295,8 +296,17 @@ export function App() {
   now.current = { tree, phone };
   useEffect(() => onTurn(pageTurn(() => flat(now.current.tree).map((s) => s.id), () => !now.current.phone)), []);
 
+  // On a computer the sidebar shut (sideshut.ts): the main pane's top bar has [Ir], pressed to open it.
+  const [shutOn, setShutOn] = useState(shutKept);
+  const shut = !phone && shutOn;
+  const shutNow = useRef(shut);
+  shutNow.current = shut;
+  const setShut = useCallback((v: boolean) => (setShutOn(v), keepShut(v)), []);
+  const onShut = useCallback(() => setShut(true), [setShut]);
+  const onUnshut = useCallback(() => setShut(false), [setShut]);
+
   // The jump box, in the sidebar (the user, 2026-11-06); on a phone ⌘K brings the sheet out too, and
-  // ⌘\ brings it out or puts it away.
+  // ⌘\ brings it out or puts it away; on a computer with the sidebar shut, it opens it.
   const [jumping, setJumping] = useState(params.get("open") === "jump");
   const jumpingNow = useRef(jumping);
   jumpingNow.current = jumping;
@@ -307,6 +317,7 @@ export function App() {
         const to = !jumpingNow.current;
         setJumping(to);
         if (to && now.current.phone) setSheet(true);
+        if (to && shutNow.current) setShut(false);
       } else if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key === "\\" && now.current.phone) {
         e.preventDefault();
         setSheet(!sheetNow.current);
@@ -397,6 +408,8 @@ export function App() {
       wsPlus={(w, trigger, o, setO) => <NewHere key={w.key} w={{ id: w.id, name: w.name, path: w.root }} trigger={trigger} open={o} setOpen={setO} opened={(id) => openChat(id)} sub={filesAllowed ? (at) => filesHandle.openWithPayload(at) : undefined} />}
       me={me}
       reveal={phone ? onSheet : undefined}
+      shut={shut}
+      onShut={phone ? undefined : onShut}
     />
   );
 
@@ -412,9 +425,9 @@ export function App() {
       <FileBrowserHandle.Provider value={filesAllowed ? filesHandle : null}>
         <Suspense fallback={<Waiting />}>
           {under.name === "chat" ? (
-            <ChatPage key={`${under.id}:${under.record ? "r" : "c"}`} id={under.id} record={under.record} sheet={below} onSheet={phone ? onSheet : undefined} onMe={phone ? onMe : undefined} />
+            <ChatPage key={`${under.id}:${under.record ? "r" : "c"}`} id={under.id} record={under.record} sheet={below} onSheet={phone ? onSheet : undefined} onMe={phone || shut ? onMe : undefined} onSide={shut ? onUnshut : undefined} />
           ) : (
-            <Empty below={below} onSheet={phone ? onSheet : undefined} onMe={phone ? onMe : undefined} />
+            <Empty below={below} onSheet={phone ? onSheet : undefined} onMe={phone || shut ? onMe : undefined} onSide={shut ? onUnshut : undefined} />
           )}
         </Suspense>
       </FileBrowserHandle.Provider>
@@ -574,7 +587,7 @@ const PICK_KEY = "grid size-8 shrink-0 place-items-center text-ink-3 pointer-coa
 const PICK_WORDS = "min-w-0 flex-1 self-center truncate px-0.5 py-1 text-md leading-[21px] text-ink-4";
 
 /** The main pane with nothing open: the splash in its middle, a box where a chat's composer is. */
-function Empty({ below, onSheet, onMe }: { below: number; onSheet?: () => void; onMe?: () => void }) {
+function Empty({ below, onSheet, onMe, onSide }: { below: number; onSheet?: () => void; onMe?: () => void; onSide?: () => void }) {
   // What ⋯ has with no chat open (kumo, 2026-11-25): the list, the settings, the usage.
   const lead = [...(onSheet ? [{ icon: <ListTree size={15} />, label: t("nav.sidebar"), run: onSheet }] : []), ...(onMe ? [{ icon: <Settings size={15} />, label: t("nav.me"), run: onMe }] : []), { icon: <BarChart3 size={15} />, label: t("usage.title"), run: () => openUsage() }];
   return (
@@ -619,6 +632,14 @@ function Empty({ below, onSheet, onMe }: { below: number; onSheet?: () => void; 
         {/* The link, as after a chat's name; ⋯ where a chat's bar has it, a computer's too (kumo,
             2026-11-25: its top bar's right was empty). */}
         {onSheet && <LinkDot className="mr-auto shrink-0" />}
+        {/* A computer's with the sidebar shut: its head's, in a phone's order (kumo, 2026-11-26). */}
+        {onSide && (
+          <div className="g-fade mr-auto ml-4 flex min-w-0 items-center gap-2.5">
+            <SideKey label={t("nav.unshut")} onClick={onSide} />
+            <AppName />
+            <LinkDot className="shrink-0" />
+          </div>
+        )}
         {(
           <Menu.Root>
             <Menu.Trigger render={<button type="button" aria-label={t("top.more")} className="g-press grid size-8 place-items-center rounded-md text-ink-2 hover:bg-fill hover:text-ink data-popup-open:bg-fill pointer-coarse:size-10" />}>
@@ -703,7 +724,9 @@ function useSettingsAt(open: boolean): CSSProperties | undefined {
   useLayoutEffect(() => {
     if (!open) return;
     const w = Math.min(288, innerWidth - 16);
-    const b = document.querySelector("[data-settings-key]")?.getBoundingClientRect();
+    const k = document.querySelector("[data-settings-key]");
+    // The sidebar shut (inert, sideshut.ts): its key out of sight.
+    const b = k && !k.closest("[inert]") ? k.getBoundingClientRect() : undefined;
     const seen = b && b.width > 0 && b.right > 0 && b.left < innerWidth && b.bottom <= innerHeight;
     const room = seen ? b.top - 16 : 0;
     if (!seen || room < 360) {
