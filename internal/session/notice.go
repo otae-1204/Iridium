@@ -31,6 +31,9 @@ const (
 	// byte range [Before, After). Unlike NoticeTaken (fired before Send), this marks the exact
 	// moment the agent accepted the input into its conversation (matching TranscriptView).
 	NoticeUserRecorded NoticeKind = "user_recorded"
+	// NoticeTasks: the agent's background tasks changed (one began, one ended; none are left once
+	// its process is gone): the session's state has them.
+	NoticeTasks NoticeKind = "tasks"
 )
 
 // Notice is one thing that happened in a session, live (never from a replay).

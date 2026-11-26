@@ -579,8 +579,12 @@ func (h *Hosted) ended(e *hold.Exit) {
 	h.mu.Lock()
 	asked := h.stopAsked || err == nil
 	h.live, h.starting, h.stopAsked = false, false, false
+	hadTasks := len(h.tasks) > 0
 	h.turn, h.asks, h.tasks = agent.Idle, nil, nil
 	var withdrawn []Notice
+	if hadTasks {
+		withdrawn = append(withdrawn, Notice{Session: h.id, Kind: NoticeTasks})
+	}
 	h.manualTurnOverLocked(func(n Notice) { n.Session = h.id; withdrawn = append(withdrawn, n) })
 	h.errText = ""
 	// What the process applied went with it: the next one is asked again.
@@ -905,6 +909,7 @@ func (h *Hosted) onEvent(e agent.Event) {
 		later(h.allowMatching)
 	case agent.Tasks:
 		h.tasks = e.Tasks
+		note(Notice{Kind: NoticeTasks})
 	case agent.Started:
 		h.model = e.Model
 		if e.Effort != "" {

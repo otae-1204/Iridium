@@ -172,9 +172,9 @@ func New(cfg config.Config, m *session.Manager, h *hub.Hub, logf func(string, ..
 	// are said where it was called before the call closes.
 	s.sat.OnTaken(s.answers.took)
 	s.sat.OnTurnStart(func(id string) { s.answers.add(id, func() { s.twins.drop(id); s.turnBegan(id) }) })
-	s.sat.OnTurnEnd(func(id, _ string, _ []string) {
-		taken := s.answers.given(id)
-		s.answers.add(id, func() { s.turnEnded(id, taken) })
+	s.sat.OnTurnEnd(func(id, _ string, _ []string, background bool) {
+		taken, self := s.answers.ended(id)
+		s.answers.add(id, func() { s.turnEnded(id, taken, self, background) })
 	})
 	m.SetInChannel(s.inSharedChannel)
 	m.SetChannelOf(s.channelOf)
@@ -195,6 +195,8 @@ func New(cfg config.Config, m *session.Manager, h *hub.Hub, logf func(string, ..
 	m.Watch(s.faceFollows)
 	// Each agent turn's tools counted: turns of words alone passed on are paused (deliver.MaxIdle).
 	m.Watch(s.chain.saw)
+	// A call held for its agent's background tasks is let go once they are over (calls.settle).
+	m.Watch(s.tasksChanged)
 	lctx, lstop := context.WithCancel(context.Background())
 	s.stopList = lstop
 	go s.watchList(lctx)
@@ -614,7 +616,8 @@ func (s *Server) interrupt(w http.ResponseWriter, r *http.Request) {
 	// closed as answered: nothing is said for it, no line that it said nothing.
 	if c := callerOf(r); c.session != "" && c.session == id {
 		unlock := s.chain.lock(id)
-		s.calls.take(id, func(called) bool { return true })
+		// Not one held for a background task: its report is yet to come (calls.settle).
+		s.calls.take(id, func(c called) bool { return !c.Held })
 		unlock()
 	}
 	// Who asked (kumo, 2026-11-26: a turn stopped and no one had pressed anything): a browser's

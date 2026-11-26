@@ -183,7 +183,7 @@ type Service struct {
 	log *channel.Service // what was said in the channels (Channels)
 	// onSaid is told each message an agent said, as it is sent out (OnSaid).
 	onSaid    func(channel.Message)
-	onTurnEnd func(session, reply string, waiting []string)
+	onTurnEnd func(session, reply string, waiting []string, background bool)
 	onTaken   func(session, input string)
 	onBegan   func(session string)
 	onAsk     func(ch string, seq int64, session string, a api.Ask)
@@ -228,8 +228,11 @@ func (s *Service) OnAsk(f func(ch string, seq int64, session string, a api.Ask))
 
 // OnTurnEnd has f told each turn of a session that ends, after its reply was said: the
 // session, the reply's words ("" if it said none), and the inputs that still wait in its queue
-// (session.Notice.Waiting). A turn cut short by its process ending is told too, with no reply.
-func (s *Service) OnTurnEnd(f func(session, reply string, waiting []string)) { s.onTurnEnd = f }
+// (session.Notice.Waiting), and whether background tasks of its agent went on as it ended
+// (session.Notice.Background). A turn cut short by its process ending is told too, with no reply.
+func (s *Service) OnTurnEnd(f func(session, reply string, waiting []string, background bool)) {
+	s.onTurnEnd = f
+}
 
 // Note writes a line of Iridium's own into channel ch and tells those who see it (_data.kind
 // "note"). ev: what it tells of, for a page to say in its own words (the message's _data.event).

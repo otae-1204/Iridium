@@ -225,6 +225,16 @@ type called struct {
 	// React: it was a reaction it was given (docs/channels.md "表情"): saying nothing for it is
 	// no silence to tell of.
 	React bool `json:"react,omitempty"`
+	// Held: the turn that took it ended with background tasks of its own still running (a
+	// subagent, a command): it stays open past that turn, and what the agent writes in a turn it
+	// begins by itself as one of them ends (no input of ours) is said in its channel too (kumo,
+	// 2026-11-26: such a report stayed in the agent's own session). Tasks: those it waits for
+	// still. With none left it is closed by the end of the turn the agent begins itself, or after
+	// heldGrace with no such turn (a task stopped, its process gone).
+	Held  bool     `json:"held,omitempty"`
+	Tasks []string `json:"tasks,omitempty"`
+	// idle: held, none of its tasks running, and being waited out (sweepHeld).
+	idle bool
 	// old: read from the store as this process began, its input given to the agent by then:
 	// the turn that took it may have ended while nobody listened (calls.began).
 	old bool
@@ -260,7 +270,9 @@ func (k *calls) open() {
 			continue
 		}
 		for i := range cs {
-			cs[i].old = !waits(k.st, cs[i], nil)
+			// One held for its tasks is no turn's leftover: they may run on past this process
+			// (settleMissed looks at it once the sessions are taken up).
+			cs[i].old = !cs[i].Held && !waits(k.st, cs[i], nil)
 		}
 		k.of[strings.TrimPrefix(key, callsKey(""))] = cs
 	}
@@ -338,23 +350,133 @@ func (k *calls) current(session string) string {
 // said in its channel. Not one given after (its last turn's words heard late, as the next turn
 // takes the call: kumo, 2026-11-17), nor one still queued. One kept from before this process,
 // its input given by then, was taken: a turn going on across a restart still answers it.
-func (k *calls) answering(session string, taken []string) (called, bool) {
+//
+// One held for its background tasks (called.Held) is answered only by words written with no
+// input given since the last turn's end (self: a turn the agent began itself, as a task ended):
+// a turn that took something else answers that. Of several held, the latest with a task that is
+// over (running: those going on now), else the latest.
+func (k *calls) answering(session string, taken []string, self bool, running func() []string) (called, bool) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	cs := k.load(session)
 	for i := len(cs) - 1; i >= 0; i-- {
-		if wasGiven(k.st, cs[i], taken) {
+		if !cs[i].Held && wasGiven(k.st, cs[i], taken) {
 			return cs[i], true
 		}
+	}
+	if !self {
+		return called{}, false
+	}
+	if i := reported(cs, running); i >= 0 {
+		return cs[i], true
 	}
 	return called{}, false
 }
 
+// reported is which of cs, held calls among them, a turn the agent began itself answers: the
+// latest with a task that is over, else the latest held; -1 with none held. running is asked
+// only with several held.
+func reported(cs []called, running func() []string) int {
+	last, n := -1, 0
+	for i := range cs {
+		if cs[i].Held {
+			last, n = i, n+1
+		}
+	}
+	if n < 2 {
+		return last
+	}
+	now := running()
+	for i := len(cs) - 1; i >= 0; i-- {
+		if cs[i].Held && slices.ContainsFunc(cs[i].Tasks, func(t string) bool { return !slices.Contains(now, t) }) {
+			return i
+		}
+	}
+	return last
+}
+
+// settle: a turn of session's agent ended, running the background tasks that go on past it;
+// given says which calls it had taken; self: it took no input (the agent began it itself). The
+// calls that are over are taken off and given back. A call it took stays open, held, while tasks
+// begun for it run: those running that no held call waits for are the latest taken call's (or,
+// begun in a turn of the agent's own, the held call that turn answered). A held call with none
+// left is over as a turn of the agent's own ends; as another turn ends it is waited out (wait:
+// sweepHeld is due), the turn that reports it may yet come. late: tasks ran as the turn ended and
+// none does now (over before this was looked at): the turn that reports them is yet to come, the
+// call it took is held and waited out as well.
+func (k *calls) settle(session string, given func(called) bool, running []string, self, late bool) (over []called, wait bool) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	cs := k.load(session)
+	answered := -1
+	if self {
+		answered = reported(cs, func() []string { return running })
+	}
+	free := slices.Clone(running)
+	fresh := -1
+	for i := range cs {
+		c := &cs[i]
+		switch {
+		case c.Held:
+			c.Tasks = slices.DeleteFunc(c.Tasks, func(t string) bool { return !slices.Contains(running, t) })
+			free = slices.DeleteFunc(free, func(t string) bool { return slices.Contains(c.Tasks, t) })
+		case given(*c):
+			fresh = i
+		}
+	}
+	if (len(free) > 0 || late) && fresh >= 0 {
+		cs[fresh].Held, cs[fresh].Tasks = true, free
+	} else if len(free) > 0 && answered >= 0 {
+		cs[answered].Tasks = append(cs[answered].Tasks, free...)
+	}
+	var kept []called
+	for _, c := range cs {
+		switch {
+		case c.Held && len(c.Tasks) > 0:
+			c.idle = false
+			kept = append(kept, c)
+		case c.Held && (!self || late):
+			wait = wait || !c.idle
+			c.idle = true
+			kept = append(kept, c)
+		case c.Held || given(c):
+			over = append(over, c)
+		default:
+			kept = append(kept, c)
+		}
+	}
+	k.of[session] = kept
+	k.save(session)
+	return over, wait
+}
+
+// lapsed: one of session's held calls has none of its tasks among running, and was not known
+// so before: sweepHeld is due.
+func (k *calls) lapsed(session string, running []string) (due bool) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	cs := k.load(session)
+	for i := range cs {
+		c := &cs[i]
+		if c.Held && !c.idle && !slices.ContainsFunc(c.Tasks, func(t string) bool { return slices.Contains(running, t) }) {
+			c.idle, due = true, true
+		}
+	}
+	return due
+}
+
+// holds: session has a call held for its background tasks.
+func (k *calls) holds(session string) bool {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return slices.ContainsFunc(k.load(session), func(c called) bool { return c.Held })
+}
+
 // wasGiven: call c's input was given to its agent, taken naming those given lately. One kept from
-// before this process (old), from before calls had an input, or whose input the store no longer
-// has (not waiting either), was.
+// before this process (old), held for its tasks (the turn that took it is over), from before
+// calls had an input, or whose input the store no longer has (not waiting either), was.
 func wasGiven(st *store.Store, c called, taken []string) bool {
-	if c.old || c.Input == "" || slices.Contains(taken, c.Input) {
+	if c.old || c.Held || c.Input == "" || slices.Contains(taken, c.Input) {
 		return true
 	}
 	if st == nil {
@@ -416,12 +538,104 @@ func (s *Server) turnBegan(id string) {
 // over; the others, still queued or given after (a message steered in as the turn ended, which
 // the next turn takes), stay open for the turn that takes them. What it wrote was said where it
 // was called as it wrote it (answer); a call it said nothing for leaves a line in its channel.
-func (s *Server) turnEnded(id string, taken []string) {
+//
+// Background tasks of its own that go on past the turn (a subagent, a command) keep the call it
+// took open (calls.settle): the agent begins a turn itself as one ends, and what it writes then
+// is its answer too. self: this turn took no input, the agent began it. background: tasks of
+// its agent went on as it ended.
+func (s *Server) turnEnded(id string, taken []string, self, background bool) {
+	running := s.tasksOf(id)
 	// Not while it is being given a message: that call is made once the message is its.
 	unlock := s.chain.lock(id)
-	over := s.calls.take(id, func(c called) bool { return wasGiven(s.st, c, taken) })
+	over, wait := s.calls.settle(id, func(c called) bool { return wasGiven(s.st, c, taken) }, running, self, background && len(running) == 0)
 	unlock()
 	s.closeCalls(id, over)
+	if wait {
+		s.sweepLater(id)
+	}
+}
+
+// heldGrace is how long a held call whose tasks are all over waits for the turn that reports
+// them, the agent at rest: that turn begins as the last one ends, when it comes at all.
+var heldGrace = 30 * time.Second
+
+// tasksOf are the background tasks of session id's agent that run now.
+func (s *Server) tasksOf(id string) []string {
+	st, err := s.m.State(id)
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(st.Tasks))
+	for _, t := range st.Tasks {
+		out = append(out, t.ID)
+	}
+	return out
+}
+
+// tasksChanged: a session's background tasks changed (session.NoticeTasks). With a call held for
+// them, and none of its tasks left, the call is waited out. Not done here: the notice is told on
+// the session's own goroutine.
+func (s *Server) tasksChanged(n session.Notice) {
+	if n.Kind != session.NoticeTasks || !s.calls.holds(n.Session) {
+		return
+	}
+	id := n.Session
+	s.answers.add(id, func() {
+		if s.calls.lapsed(id, s.tasksOf(id)) {
+			s.sweepLater(id)
+		}
+	})
+}
+
+// sweepLater has session id's held calls looked at once heldGrace is over (sweepHeld), in its
+// turn of answers.
+func (s *Server) sweepLater(id string) {
+	time.AfterFunc(heldGrace, func() { s.answers.add(id, func() { s.sweepHeld(id) }) })
+}
+
+// sweepHeld closes session id's held calls whose tasks are all over and that no turn of the
+// agent's own came for: one stopped, its process gone, one whose end the agent said nothing of.
+// With a turn going on, that turn's end settles them (turnEnded).
+func (s *Server) sweepHeld(id string) {
+	st, err := s.m.State(id)
+	if err == nil && (st.Status == api.StatusRunning || st.Status == api.StatusCompacting || st.Status == api.StatusStarting) {
+		return
+	}
+	running := s.tasksOf(id)
+	unlock := s.chain.lock(id)
+	over := s.calls.take(id, func(c called) bool {
+		return c.Held && c.idle && !slices.ContainsFunc(c.Tasks, func(t string) bool { return slices.Contains(running, t) })
+	})
+	unlock()
+	s.closeCalls(id, over)
+}
+
+// homeOf is the channel session id's agent was started for, when that is the one channel it is
+// in beside its own: where what it writes in a turn it began itself is said when no call is
+// open for it (a wake-up it set itself, a task's end told late). "" for any other.
+func (s *Server) homeOf(id string) string {
+	sp := s.spawnedOf(id)
+	if sp == nil || sp.Channel == "" || sp.Channel == id {
+		return ""
+	}
+	if in := s.ch.In(id); len(in) != 1 || in[0] != sp.Channel {
+		return ""
+	}
+	return sp.Channel
+}
+
+// answering is the call what session id's agent wrote answers (calls.answering), with the
+// inputs it had been given by then and whether it had been given none since its last turn's
+// end (answers.given). No call open and the turn its own: its home channel (homeOf), as a call
+// of no message.
+func (s *Server) answering(id string, taken []string, self bool) (called, bool) {
+	c, ok := s.calls.answering(id, taken, self, func() []string { return s.tasksOf(id) })
+	if !ok && self {
+		if ch := s.homeOf(id); ch != "" {
+			return called{Channel: ch}, true
+		}
+	}
+	return c, ok
 }
 
 // closeCalls closes calls over of session id, whose turn ended (turnEnded): each it said nothing
@@ -2762,12 +2976,12 @@ func (s *Server) passOn(m channel.Message, sender string) {
 // the rest is done in its turn of answers, after what it wrote before and before its turn's end
 // closes the call.
 func (s *Server) answer(id string, m channel.Message) {
-	taken := s.answers.given(id)
+	taken, self := s.answers.given(id)
 	text, nick, final := m.Text, s.ch.Nick(id), m.D.Final
 	s.answers.add(id, func() {
 		// A message being given to it has its call made by the time this lock is had (deliverTo).
 		unlock := s.chain.lock(id)
-		c, ok := s.calls.answering(id, taken)
+		c, ok := s.answering(id, taken, self)
 		// Its own channel may have the same words twice (heard live, then read from its record
 		// as another): they are said for a call once.
 		ok = ok && c.Channel != m.Channel && s.ch.Speaks(c.Channel, id) && s.answers.first(id, c, text, m.Seq)
@@ -2808,9 +3022,12 @@ func (s *Server) answer(id string, m channel.Message) {
 // was called, its turn's start and end closing calls (server.go), one at a time; and the inputs
 // it was given lately (took), in order with what it says.
 type answers struct {
-	mu     sync.Mutex
-	of     map[string][]func()
-	taken  map[string][]string
+	mu    sync.Mutex
+	of    map[string][]func()
+	taken map[string][]string
+	// fresh: how many inputs each agent was given since its last turn ended. None: a turn going
+	// on is one it began itself (a background task of its ended).
+	fresh  map[string]int
 	said   map[string][]saidFor
 	closed bool
 	wg     sync.WaitGroup
@@ -2872,13 +3089,27 @@ func (a *answers) took(session, input string) {
 	}
 	t := append(a.taken[session], input)
 	a.taken[session] = t[max(0, len(t)-keptTaken):]
+	if a.fresh == nil {
+		a.fresh = map[string]int{}
+	}
+	a.fresh[session]++
 }
 
-// given are the inputs session's agent was given lately, as told so far.
-func (a *answers) given(session string) []string {
+// given are the inputs session's agent was given lately, as told so far; self: none since its
+// last turn ended.
+func (a *answers) given(session string) (taken []string, self bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return slices.Clone(a.taken[session])
+	return slices.Clone(a.taken[session]), a.fresh[session] == 0
+}
+
+// ended is given as a turn of session's agent ends: what follows is of the next turn.
+func (a *answers) ended(session string) (taken []string, self bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	self = a.fresh[session] == 0
+	delete(a.fresh, session)
+	return slices.Clone(a.taken[session]), self
 }
 
 // add queues do for session's agent; the first queued starts the one that does them.
@@ -3240,7 +3471,7 @@ func (s *Server) liveSaid(m channel.Message, passing bool) {
 	if !ok || m.Channel != id {
 		return
 	}
-	taken := s.answers.given(id)
+	taken, self := s.answers.given(id)
 	s.answers.add(id, func() {
 		if tw, has := s.twins.of(id, m.Seq); has {
 			s.sat.TwinNow(tw.channel, tw.seq, m, passing, "")
@@ -3252,7 +3483,7 @@ func (s *Server) liveSaid(m channel.Message, passing bool) {
 			return
 		}
 		unlock := s.chain.lock(id)
-		c, ok := s.calls.answering(id, taken)
+		c, ok := s.answering(id, taken, self)
 		ok = ok && c.Channel != m.Channel && s.ch.Speaks(c.Channel, id)
 		unlock()
 		if !ok {

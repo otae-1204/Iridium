@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/kumoSleeping/iridium/internal/api"
@@ -31,20 +32,36 @@ func (s *Server) missedLoop(ctx context.Context) {
 	s.settleMissed()
 }
 
-// olds are the sessions with a call kept from before this process.
+// olds are the sessions with a call kept from before this process, or one held for background
+// tasks (called.Held), which may have ended meanwhile.
 func (k *calls) olds() []string {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	var out []string
 	for id, cs := range k.of {
 		for _, c := range cs {
-			if c.old {
+			if c.old || c.Held {
 				out = append(out, id)
 				break
 			}
 		}
 	}
 	return out
+}
+
+// stale makes session's held calls with none of their tasks among running old ones: kept from
+// before this process, their tasks over while nobody listened, and so the turn that told of them.
+func (k *calls) stale(session string, running []string) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	cs := k.load(session)
+	for i := range cs {
+		c := &cs[i]
+		if c.Held && !c.idle && !slices.ContainsFunc(c.Tasks, func(t string) bool { return slices.Contains(running, t) }) {
+			c.Held, c.Tasks, c.old = false, nil, true
+		}
+	}
+	k.save(session)
 }
 
 func (s *Server) settleMissed() {
@@ -55,6 +72,9 @@ func (s *Server) settleMissed() {
 		if err != nil || st.Status == api.StatusRunning || st.Status == api.StatusCompacting || st.Status == api.StatusStarting {
 			continue
 		}
+		// Held for tasks that are over: as any call whose turn ended meanwhile. With one running
+		// still, it stays held for the turn that reports it.
+		s.calls.stale(id, s.tasksOf(id))
 		s.ch.Touch(id) // what it wrote meanwhile, into its own channel
 		s.answers.add(id, func() { s.missed(id) })
 	}
@@ -64,7 +84,7 @@ func (s *Server) settleMissed() {
 // turn of answers.
 func (s *Server) missed(id string) {
 	unlock := s.chain.lock(id)
-	c, ok := s.calls.answering(id, nil)
+	c, ok := s.calls.answering(id, nil, false, nil)
 	unlock()
 	if ok && c.old && c.Channel != id && s.ch.Speaks(c.Channel, id) {
 		if m, ok := s.lastSaidSince(id, c.From); ok && !s.saidThere(c.Channel, id, m.Text) {

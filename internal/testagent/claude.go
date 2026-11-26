@@ -73,6 +73,10 @@ func Main() (code int, ok bool) {
 //   - QUOTA is refused for the quota, which comes back in an hour.
 //   - BACKGROUND sends a subagent and a shell command to the background and ends the turn: the
 //     subagent goes on till stop_task stops it, the command ends after bgBash.
+//   - BGREPORT sends a shell command to the background and ends the turn; the command ends after
+//     bgReport, and the agent begins a turn of its own (no message) that says "report: <task>",
+//     as Claude does when a task of its ends. BGSTAY: the same, the command going on till
+//     stop_task stops it. BGQUIET: as BGSTAY, and no turn follows its end.
 //
 // /compact compacts for three seconds (a compacting status, then the boundary with its figures).
 // /clear (as the whole message, its source prefix aside) clears it as Claude's own does: a
@@ -87,6 +91,15 @@ var bgBash = func() time.Duration {
 		return d
 	}
 	return 8 * time.Second
+}()
+
+// bgReport is how long BGREPORT's shell command runs: IRIDIUM_FAKE_BG_REPORT (a duration), else
+// half a second.
+var bgReport = func() time.Duration {
+	if d, err := time.ParseDuration(os.Getenv("IRIDIUM_FAKE_BG_REPORT")); err == nil {
+		return d
+	}
+	return 500 * time.Millisecond
 }()
 
 func Claude() int {
@@ -240,8 +253,11 @@ func Claude() int {
 	var bg []map[string]any
 	var bgTick <-chan time.Time
 	bgRuns := 0
-	bgSince := map[string]time.Time{} // a subagent's id: when it began
+	bgSince := map[string]time.Time{}  // a subagent's id: when it began
 	bgShells := map[string]time.Time{} // a shell command's id: when it ends
+	bgReports := map[string]bool{}     // a task's id: its end begins a turn that reports it
+	var bgDue <-chan time.Time         // BGREPORT's command ends
+	bgDueID := ""
 	tellBg := func() {
 		say(map[string]any{"type": "system", "subtype": "background_tasks_changed", "tasks": bg, "uuid": "bg", "session_id": session})
 	}
@@ -255,6 +271,16 @@ func Claude() int {
 			}
 		}
 		return false
+	}
+	// report: the turn the agent begins by itself as task id ends, saying so.
+	report := func(id string) {
+		if !bgReports[id] {
+			return
+		}
+		delete(bgReports, id)
+		begin(nil)
+		assistant("report: " + id)
+		end(nil, "success")
 	}
 	for {
 		var line []byte
@@ -276,6 +302,12 @@ func Claude() int {
 			timer = nil
 			finish(waiting, steered)
 			waiting, steered, holding = nil, nil, false
+			continue
+		case <-bgDue:
+			bgDue = nil
+			if dropBg(bgDueID, "completed") {
+				report(bgDueID)
+			}
 			continue
 		case now := <-bgTick:
 			for _, x := range bg {
@@ -349,6 +381,7 @@ func Claude() int {
 				}
 				delete(bgShells, tid)
 				answer(id, map[string]any{})
+				report(tid)
 			case "interrupt":
 				answer(id, map[string]any{"still_queued": []any{}})
 				if waiting != nil {
@@ -580,6 +613,27 @@ func Claude() int {
 				bgSince[aid] = time.Now()
 				if bgTick == nil {
 					bgTick = time.NewTicker(time.Second).C
+				}
+				finish(f, nil)
+				continue
+			case strings.HasSuffix(text, "BGREPORT"), strings.HasSuffix(text, "BGSTAY"), strings.HasSuffix(text, "BGQUIET"):
+				// A shell command sent to the background, the turn over at once with its words; the
+				// command's end begins a turn of the agent's own that reports it (not BGQUIET's).
+				bgRuns++
+				sid := fmt.Sprintf("brep%d", bgRuns)
+				scall := "toolu_bg_report_" + session[:8] + sid
+				shellCall := map[string]any{"type": "tool_use", "id": scall, "name": "Bash", "input": map[string]any{"command": "make", "description": "Build", "run_in_background": true}}
+				shellDone := map[string]any{"type": "tool_result", "tool_use_id": scall, "content": "Command running in background with ID: " + sid + "."}
+				for _, m := range []map[string]any{{"role": "assistant", "content": []any{shellCall}}, {"role": "user", "content": []any{shellDone}}} {
+					say(map[string]any{"type": m["role"], "parent_tool_use_id": nil, "message": m})
+					note(map[string]any{"type": m["role"], "timestamp": stamp(), "message": m})
+				}
+				bg = append(bg, map[string]any{"task_id": sid, "task_type": "local_bash", "description": "Build"})
+				tellBg()
+				say(map[string]any{"type": "system", "subtype": "task_started", "task_id": sid, "tool_use_id": scall, "description": "Build", "is_backgrounded": true, "task_type": "local_bash"})
+				bgReports[sid] = !strings.HasSuffix(text, "BGQUIET")
+				if strings.HasSuffix(text, "BGREPORT") {
+					bgDue, bgDueID = time.After(bgReport), sid
 				}
 				finish(f, nil)
 				continue
