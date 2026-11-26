@@ -28,7 +28,7 @@ import { errText, toast } from "./toast";
 import { manages, useMachines, useMe, useSaidLine, useUpdate } from "./data";
 import { agentName, ago, cn, fine, IconKey, IrMark, keep, kept, Lamp, lampOf, Logo, own, sessionStatusText, statusText, tilde, Tip, titleOf, useEver, untitled, useLongPress, useMenuAt, useMinute, usePointAnchor, MenuPortal } from "./ui";
 import { AppName } from "./appkey";
-import { isFavorite, placeFavorite, setFavorite, useFavorites } from "./favorites";
+import { isFavorite, placeFavorite, setFavorite, setFavoritesColor, useFavorites, useFavoritesColor } from "./favorites";
 import { PLACE_DRAG, SESSION_DRAG } from "./chat/refs";
 import { badge, isQuiet, setQuiet, useAt, useQuiet, useUnread } from "./unread";
 import { Face, FaceStack } from "./chat/channel/face";
@@ -468,16 +468,7 @@ export function Sidebar(p: Props) {
             anywhere onto its row goes first in it, onto one of its rows beside that one. */}
         {favs.length > 0 && (
           <div className="mt-1" role="group">
-            <Row
-              depth={0}
-              flip="fav"
-              head
-              expanded={favOpen}
-              onClick={() => p.toggle(FAV)}
-              icon={<Bookmark size={15} className="text-ink-2" />}
-              label={t("nav.favorites")}
-              extra={dropTarget("ws", FAV, FAV_HEAD, () => {}, { kind: "s", lane: ANY, line: dropMark({ kind: "ws", id: FAV, lane: FAV_HEAD }), edge: "bottom", drop: (d) => placeFavorite(d.id, favs[0]!.id, "top") })}
-            />
+            <FavHead open={favOpen} onToggle={() => p.toggle(FAV)} first={favs[0]!.id} />
             {favOpen &&
               favs.map((s) => (
                 <SessionRow
@@ -763,6 +754,10 @@ function WsRow({ flip, id, name, root, sessions, hung, machine, remote, folders,
   const failed = (e: unknown) => toast(t("err.action"), { error: true, description: errText(e) });
   // The group's voice, its way in (kumo, 2026-11-16).
   const voice = useVoiceItem(id);
+  // Its colour tag, as a folder's (its folder's mark): here only, a colour going on a folder of
+  // this machine (kumo, 2026-11-26).
+  const color = useFolderColors()[root];
+  const tags: Tags | undefined = id > 0 && !remote ? { value: color, set: (c) => void api.markFolder(root, { color: c as Color }).catch(failed) } : undefined;
   const items = [
     ...(id > 0 ? [voice] : []),
     // Those hung under its sessions go with them (the server's cascade): counted, not sent. The way
@@ -791,7 +786,7 @@ function WsRow({ flip, id, name, root, sessions, hung, machine, remote, folders,
         } }]
       : []),
   ];
-  const menu = items.length > 0;
+  const menu = items.length > 0 || !!tags;
   // Dragged among all groups' rows, by its key (tree.ts WsNode.key).
   const dim = useDragged("ws", wkey);
   const dragging = movable
@@ -818,7 +813,7 @@ function WsRow({ flip, id, name, root, sessions, hung, machine, remote, folders,
         // No chevron, on a phone either (the user, 2026-11-08): its sessions shown under it, or not.
         expanded={open}
         reveal
-        icon={<WsMark open={open} remote={!!remote} />}
+        icon={<WsMark open={open} remote={!!remote} color={color} />}
         onClick={() => !renaming && onToggle()}
         label={
           renaming ? (
@@ -847,7 +842,7 @@ function WsRow({ flip, id, name, root, sessions, hung, machine, remote, folders,
             <Menu.Positioner anchor={anchor} side="bottom" align="start" sideOffset={4} collisionPadding={8} className="z-50">
               {/* No 删除 (the user, 2026-11-08): a group is the folder its sessions are in; it goes
                   once none is shown. */}
-              <MenuItems items={items} />
+              <MenuItems items={items} tags={tags} />
             </Menu.Positioner>
           </MenuPortal>
         </Menu.Root>
@@ -866,8 +861,52 @@ function FolderLabel({ path }: { path: string }) {
   return <>{sp.m ? sp.label : tilde(path)}</>;
 }
 
-function WsMark({ open, remote }: { open: boolean; remote: boolean }) {
-  return <FolderMark open={open} remote={remote} className="text-ink-2" />;
+function WsMark({ open, remote, color }: { open: boolean; remote: boolean; color?: Color }) {
+  return <FolderMark open={open} remote={remote} color={color} className="text-ink-2" />;
+}
+
+/** My favorites' row (favorites.ts): open or folded; a session dropped on it goes first among
+ *  them; its menu (right click, long-press) its colour tag, mine alone (kumo, 2026-11-26), the
+ *  bookmark tinted as a folder is. */
+function FavHead({ open, onToggle, first }: { open: boolean; onToggle: () => void; first: string }) {
+  const color = useFavoritesColor();
+  const [at, setAt] = useMenuAt();
+  const lp = useLongPress((p) => setAt({ x: p.x, y: p.y }));
+  const anchor = usePointAnchor(at);
+  return (
+    <>
+      <Row
+        depth={0}
+        flip="fav"
+        head
+        expanded={open}
+        onClick={onToggle}
+        icon={
+          <span
+            aria-hidden
+            className={cn("grid transition-colors duration-(--dur-2)", color ? "[&_svg]:[fill:color-mix(in_oklch,currentColor_24%,transparent)]" : "text-ink-2")}
+            style={color ? { color: colorVar(color) } : undefined}
+          >
+            <Bookmark size={15} />
+          </span>
+        }
+        label={t("nav.favorites")}
+        extra={{
+          ...lp,
+          onContextMenu: (e: React.MouseEvent) => !lp.onContextMenu(e) && own(e) && (e.preventDefault(), setAt({ x: e.clientX, y: e.clientY })),
+          onClickCapture: lp.onClickCapture,
+          ...dropTarget("ws", FAV, FAV_HEAD, () => {}, { kind: "s", lane: ANY, line: dropMark({ kind: "ws", id: FAV, lane: FAV_HEAD }), edge: "bottom", drop: (d) => placeFavorite(d.id, first, "top") }),
+        }}
+      />
+      <Menu.Root open={at !== null} onOpenChange={(o) => !o && setAt(null)}>
+        <MenuPortal>
+          <Menu.Positioner anchor={anchor} side="bottom" align="start" sideOffset={4} collisionPadding={8} className="z-50">
+            <MenuItems items={[]} tags={{ value: color, set: setFavoritesColor }} />
+          </Menu.Positioner>
+        </MenuPortal>
+      </Menu.Root>
+    </>
+  );
 }
 
 /** A workspace's new name, in place of its row's: Enter or leaving it renames, Esc leaves it. */

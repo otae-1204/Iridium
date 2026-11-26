@@ -34,6 +34,7 @@ func (s *Server) roleRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/internal/personas", s.personasGet)
 	mux.HandleFunc("GET /v1/internal/favorites", s.favoritesGet)
 	mux.HandleFunc("PUT /v1/internal/favorites", s.favoritesPut)
+	mux.HandleFunc("PATCH /v1/internal/favorites", s.favoritesPatch)
 }
 
 // roleOut is role r as the API gives it.

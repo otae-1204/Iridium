@@ -42,3 +42,23 @@ func (s *Store) SetFavorites(member string, channels []string) error {
 		return nil
 	})
 }
+
+// FavoritesColor is the colour tag of member's favorites ("" none).
+func (s *Store) FavoritesColor(member string) (string, error) {
+	var c string
+	err := s.db.QueryRow(`SELECT color FROM favorite_colors WHERE member = ?`, member).Scan(&c)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return c, err
+}
+
+// SetFavoritesColor tags member's favorites with color ("" takes it off).
+func (s *Store) SetFavoritesColor(member, color string) error {
+	if color == "" {
+		_, err := s.db.Exec(`DELETE FROM favorite_colors WHERE member = ?`, member)
+		return err
+	}
+	_, err := s.db.Exec(`INSERT INTO favorite_colors (member, color) VALUES (?, ?) ON CONFLICT (member) DO UPDATE SET color = excluded.color`, member, color)
+	return err
+}

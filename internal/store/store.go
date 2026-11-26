@@ -406,6 +406,8 @@ var schema = []string{
 		sort    INTEGER NOT NULL,
 		PRIMARY KEY (member, channel)
 	);`,
+	// 49: the colour of each member's favorites' folder (favorites.go; kumo, 2026-11-26).
+	`CREATE TABLE IF NOT EXISTS favorite_colors (member TEXT PRIMARY KEY, color TEXT NOT NULL);`,
 }
 
 // steps run in Go after the migration of their version, in the same transaction.

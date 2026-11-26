@@ -114,6 +114,7 @@ GET internal/memory {session?} -> Memory[]  what you chose to remember, the late
 DELETE internal/memory/{id} - -> {ok}  forget one
 GET internal/favorites - -> Favorites  the channels you favoured (a session's is its id), in your order: the page lists them first; your own alone
 PUT internal/favorites {channels} -> Favorites  your favorites made this whole list (at most 200), in its order; [] none
+PATCH internal/favorites {color} -> Favorites  your favorites' colour tag: red, orange, yellow, green, blue, purple; "" none
 POST internal/roles {session | name, agent, machine?, model?, preset?, persona?, avatar?} -> Role  keep a role: from a session as it is now (its card, agent, model, preset; the session is the role's from then on), or as given; no effort or mode: those are each start's; no intro: each of its sessions writes its own; person only
 PATCH internal/roles/{id} {name?, model?, preset?, persona?, avatar?, sort?, session?} -> Role  change a role (its agent stays); session: take its card (persona, face) from that session again, not its model; person only
 DELETE internal/roles/{id} - -> {ok}  take a role away, its memory with it; its sessions stay; person only

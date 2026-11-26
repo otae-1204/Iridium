@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/kumoSleeping/iridium/internal/api"
@@ -13,12 +14,43 @@ import (
 // list of sessions while it holds any. Kept by member, so a person's follows them to every device.
 
 func (s *Server) favoritesGet(w http.ResponseWriter, r *http.Request) {
-	chs, err := s.st.Favorites(memberOf(callerOf(r)))
+	s.favoritesReply(w, memberOf(callerOf(r)))
+}
+
+// favoritesReply answers with member's favorites as they are now.
+func (s *Server) favoritesReply(w http.ResponseWriter, member string) {
+	chs, err := s.st.Favorites(member)
 	if err != nil {
 		s.fault(w, err)
 		return
 	}
-	reply(w, http.StatusOK, api.Favorites{Channels: chs})
+	c, err := s.st.FavoritesColor(member)
+	if err != nil {
+		s.fault(w, err)
+		return
+	}
+	reply(w, http.StatusOK, api.Favorites{Channels: chs, Color: api.Color(c)})
+}
+
+// favoritesPatch tags the caller's favorites' folder with a colour, or takes it off.
+func (s *Server) favoritesPatch(w http.ResponseWriter, r *http.Request) {
+	var req api.FavoritesPatch
+	if !readJSON(w, r, &req) {
+		return
+	}
+	member := memberOf(callerOf(r))
+	if req.Color != nil {
+		if *req.Color != "" && !slices.Contains(api.Colors, *req.Color) {
+			refuse(w, http.StatusBadRequest, "bad_request", "color: red, orange, yellow, green, blue, purple, or \"\"")
+			return
+		}
+		if err := s.st.SetFavoritesColor(member, string(*req.Color)); err != nil {
+			s.fault(w, err)
+			return
+		}
+		s.hub.Set("favorites", s.favoritesSeq.Add(1))
+	}
+	s.favoritesReply(w, member)
 }
 
 // favoritesPut makes the caller's favorites the list given, in its order.
@@ -46,10 +78,5 @@ func (s *Server) favoritesPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.hub.Set("favorites", s.favoritesSeq.Add(1))
-	out, err := s.st.Favorites(member)
-	if err != nil {
-		s.fault(w, err)
-		return
-	}
-	reply(w, http.StatusOK, api.Favorites{Channels: out})
+	s.favoritesReply(w, member)
 }

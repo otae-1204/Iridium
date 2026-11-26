@@ -27,4 +27,15 @@ func TestFavorites(t *testing.T) {
 	if got, _ = s.Favorites("web/a"); len(got) != 0 {
 		t.Fatalf("a cleared: %v", got)
 	}
+	must(t, s.SetFavoritesColor("web/a", "blue"))
+	if c, _ := s.FavoritesColor("web/a"); c != "blue" {
+		t.Fatalf("a's colour: %q", c)
+	}
+	if c, _ := s.FavoritesColor("web/b"); c != "" {
+		t.Fatalf("b's colour: %q", c)
+	}
+	must(t, s.SetFavoritesColor("web/a", ""))
+	if c, _ := s.FavoritesColor("web/a"); c != "" {
+		t.Fatalf("a's colour taken off: %q", c)
+	}
 }

@@ -2071,6 +2071,16 @@ export interface Memory {
  */
 export interface Favorites {
   channels: string[];
+  /**
+   * Color: the colour tag of the favorites' folder, the caller's own (PATCH); none: untagged.
+   */
+  color?: Color;
+}
+/**
+ * FavoritesPatch changes the caller's favorites' colour tag ("" takes it off).
+ */
+export interface FavoritesPatch {
+  color?: Color;
 }
 /**
  * Remember is a memory to keep.
