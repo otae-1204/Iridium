@@ -35,9 +35,9 @@ export const zh = {
   "machine.reconnecting": "重新连接中",
   "status.unreadCount": "{n} 条新消息",
 
-  "top.online": "已连接 · 往返 {ms} ms",
+  "top.online": "在线 · {ms} ms",
   "top.connecting": "连接中",
-  "top.offline": "已断开，重连中",
+  "top.offline": "已断开",
   "top.reload": "刷新",
   "top.reloadHint": "页面有新版本，点击刷新",
   "top.offlineShort": "断开",
@@ -268,7 +268,6 @@ export const zh = {
   "shell.ended": "已结束",
 
   "channel.agents": "Agent",
-  "channel.subsAtWork": "在干活的子代理",
   "channel.event.join": "{nick} 已加入",
   "channel.event.leave": "{nick} 已移出",
   "channel.event.rename": "{from} 改名 {nick}",

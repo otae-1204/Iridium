@@ -456,60 +456,33 @@ body {
   background: var(--compact);
   animation: row-breathe 2s ease-in-out infinite;
 }
-/* The work bar's faces (chat/channel/workbar.tsx): in a turn an arc turning round the face; only
-   background work, the whole ring breathing slowly; the number of its tasks at the lower right. Only
-   transform and opacity move. */
-.wb-face {
-  position: relative;
-  display: grid;
-  flex-shrink: 0;
-}
-.wb-face::before {
-  content: "";
-  position: absolute;
-  inset: -3px;
+/* The work key's dot (chat/channel/workkey.tsx): tiny, very faint, neutral, breathing slowly; no
+   green, nothing turning (kumo + Neon, 2026-11-26). The link's signal not measured yet breathes the
+   same way (link.tsx). Only opacity moves; still where motion is reduced. */
+.wk-dot {
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
-  pointer-events: none;
+  background: var(--ink-3);
+  opacity: 0.45;
+  animation: wk-breathe 2.8s ease-in-out infinite;
 }
-.wb-face[data-p="reply"]::before {
-  border: 2px solid transparent;
-  border-top-color: var(--run);
-  border-right-color: var(--run);
-  animation: wb-turn 1.1s linear infinite;
+.sig-wait {
+  animation: wk-breathe 2.8s ease-in-out infinite;
 }
-.wb-face[data-p="back"]::before {
-  box-shadow: inset 0 0 0 1.5px var(--run);
-  animation: wb-breathe 2.8s ease-in-out infinite;
-}
-.wb-badge {
-  position: absolute;
-  right: -6px;
-  bottom: -5px;
-  min-width: 15px;
-  height: 15px;
-  padding: 0 3.5px;
-  border-radius: 8px;
-  background: var(--ink);
-  color: var(--paper);
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 15px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-  box-shadow: 0 0 0 1.5px var(--glass-solid);
-}
-@keyframes wb-turn {
-  to {
-    transform: rotate(1turn);
-  }
-}
-@keyframes wb-breathe {
+@keyframes wk-breathe {
   0%,
   100% {
-    opacity: 1;
+    opacity: 0.5;
   }
   50% {
-    opacity: 0.25;
+    opacity: 0.15;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wk-dot,
+  .sig-wait {
+    animation: none;
   }
 }
 @keyframes row-breathe {

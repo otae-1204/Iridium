@@ -17,7 +17,7 @@ import { cn, MenuPortal, PHONE, useMedia } from "../../ui";
 import { ITEM } from "./invite";
 
 type Page = { id: string; title: string };
-type Pages = { stack: Page[]; push: (p: Page) => void; pop: () => void; slot: HTMLElement | null; gone: Page | null };
+export type Pages = { stack: Page[]; push: (p: Page) => void; pop: () => void; slot: HTMLElement | null; gone: Page | null };
 const Ctx = createContext<Pages | null>(null);
 
 /** Whether a menu's next levels are its pages: the phone's layout, whatever the device (kumo,
@@ -69,6 +69,26 @@ export function Paged({ children }: { children: ReactNode }) {
   );
 }
 
+/** The page id of a Paged menu, drawn while it is in the stack (or going back out): ‹ title at its
+ *  head, back. Its key is the caller's: a row (Deeper), or a key of its own (the members' +). */
+export function PageOf({ pages, id, title, children }: { pages: Pages; id: string; title: string; children: ReactNode }) {
+  const at = pages.stack.findIndex((p) => p.id === id);
+  // Not in the stack: no page drawn (with none open, at -1 is no top: every row's page was drawn
+  // at once, kumo 2026-11-25).
+  const place: Place | null = at < 0 ? (pages.gone?.id === id ? "gone" : null) : at === pages.stack.length - 1 ? "top" : "under";
+  if (!place || !pages.slot) return null;
+  return createPortal(
+    <Layer place={place}>
+      <Menu.Item closeOnClick={false} onClick={pages.pop} className={cn(ITEM, "text-ink-2")}>
+        <ChevronLeft size={15} />
+        <span className="min-w-0 flex-1 truncate">{title}</span>
+      </Menu.Item>
+      {children}
+    </Layer>,
+    pages.slot,
+  );
+}
+
 /** A row opening a next level: row, what the row shows (its icon, name, what is picked); title,
  *  the page's head; popup, the submenu's surface; bare: no › at its end. */
 export function Deeper({ row, title, i, popup, bare, disabled, children }: { row: ReactNode; title: string; i: number; popup: string; bare?: boolean; disabled?: boolean; children: ReactNode }) {
@@ -76,27 +96,14 @@ export function Deeper({ row, title, i, popup, bare, disabled, children }: { row
   const id = useId();
   const style = { "--i": i } as CSSProperties;
   if (pages) {
-    const at = pages.stack.findIndex((p) => p.id === id);
-    // Not in the stack: no page drawn (with none open, at -1 is no top: every row's page was drawn
-    // at once, kumo 2026-11-25).
-    const place: Place | null = at < 0 ? (pages.gone?.id === id ? "gone" : null) : at === pages.stack.length - 1 ? "top" : "under";
     return (
       <>
         <Menu.Item closeOnClick={false} disabled={disabled} onClick={() => pages.push({ id, title })} style={style} className={cn(ITEM, "data-disabled:opacity-40")}>
           {row}
         </Menu.Item>
-        {place &&
-          pages.slot &&
-          createPortal(
-            <Layer place={place}>
-              <Menu.Item closeOnClick={false} onClick={pages.pop} className={cn(ITEM, "text-ink-2")}>
-                <ChevronLeft size={15} />
-                <span className="min-w-0 flex-1 truncate">{title}</span>
-              </Menu.Item>
-              {children}
-            </Layer>,
-            pages.slot,
-          )}
+        <PageOf pages={pages} id={id} title={title}>
+          {children}
+        </PageOf>
       </>
     );
   }

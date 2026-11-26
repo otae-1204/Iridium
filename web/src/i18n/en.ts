@@ -35,9 +35,9 @@ export const en: Dict = {
   "machine.reconnecting": "Reconnecting",
   "status.unreadCount": "{n} unread",
 
-  "top.online": "Connected · {ms} ms round trip",
+  "top.online": "Online · {ms} ms",
   "top.connecting": "Connecting",
-  "top.offline": "Disconnected, reconnecting",
+  "top.offline": "Disconnected",
   "top.reload": "Reload",
   "top.reloadHint": "A newer version of this page is available. Click to reload.",
   "top.offlineShort": "Offline",
@@ -268,7 +268,6 @@ export const en: Dict = {
   "shell.ended": "Ended",
 
   "channel.agents": "Agents",
-  "channel.subsAtWork": "Subagents at work",
   "channel.event.join": "{nick} joined",
   "channel.event.leave": "{nick} removed",
   "channel.event.rename": "{from} renamed {nick}",

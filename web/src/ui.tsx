@@ -273,7 +273,7 @@ function onWords(el: Element, x: number, y: number) {
 
 /** The words behind an icon: on hover or keyboard focus; never for a finger, whose long press is a
  *  row's menu: the two came up together (the user, 2026-11-08). */
-export function Tip({ label, children, side = "top", align = "center" }: { label: ReactNode; children: ReactElement; side?: "top" | "bottom" | "left" | "right"; align?: "start" | "center" | "end" }) {
+export function Tip({ label, children, side = "top", align = "center", tap }: { label: ReactNode; children: ReactElement; side?: "top" | "bottom" | "left" | "right"; align?: "start" | "center" | "end"; tap?: boolean }) {
   const [open, setOpen] = useState(false);
   useEffect(() => {
     if (!open) return;
@@ -290,7 +290,8 @@ export function Tip({ label, children, side = "top", align = "center" }: { label
         setOpen(o && !touched && !(byFocus && !keyed));
       }}
     >
-      <Tooltip.Trigger render={children} />
+      {/* tap: pressed it shows too, a finger's way to it (the link's signal: no hover on a phone). */}
+      <Tooltip.Trigger render={children} onClick={tap ? () => setOpen(true) : undefined} />
       <TooltipPortal>
         <Tooltip.Positioner side={side} align={align} sideOffset={6} collisionPadding={8} className="z-70">
           <Tooltip.Popup className="g-unfold glass thick float w-max max-w-80 rounded-md px-2 py-1 text-xs text-ink">{label}</Tooltip.Popup>

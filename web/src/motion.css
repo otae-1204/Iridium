@@ -265,20 +265,7 @@
 .g-fade {
   animation: g-fade-in var(--dur-2) var(--ease-out) both;
 }
-/* --- the work bar (chat/channel/workbar.tsx): fades in as one begins to work, out as the last
-   ends (kept drawn as it was meanwhile); a task ended fades out at the end of its moment. --- */
-.wb-bar {
-  transition: opacity var(--dur-2) var(--ease-out);
-}
-@starting-style {
-  .wb-bar {
-    opacity: 0;
-  }
-}
-.wb-bar:not([data-on]) {
-  opacity: 0;
-  pointer-events: none;
-}
+/* --- the work panel (chat/channel/workkey.tsx): a task ended fades out at the end of its moment. --- */
 .wb-task[data-done] {
   animation: g-fade-out var(--fade) var(--ease-out) calc(4s - var(--fade)) both; /* workstate.ts DONE_FOR */
 }
@@ -621,9 +608,6 @@ html[data-turn] .vt-drawer {
   }
   .row-lamp::after {
     animation: none !important;
-  }
-  .wb-face[data-p="reply"]::before {
-    animation: lamp-fade 2.4s ease-in-out infinite;
   }
   @keyframes g-rise {
     from {

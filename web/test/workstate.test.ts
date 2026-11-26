@@ -3,7 +3,8 @@
 import { describe, expect, test } from "vitest";
 import type { Msg } from "../src/chat/channel/lib";
 import { bgLaunch } from "../src/chat/fold";
-import { clockOf, DONE_FOR, folded, phaseOf, settle, taskKind, workers, writingOf, type Phase, type Shown } from "../src/chat/channel/workstate";
+import type { Session } from "../src/api/types.gen";
+import { clockOf, DONE_FOR, folded, looseSubs, phaseOf, settle, taskKind, workers, writingOf, type Phase, type Shown } from "../src/chat/channel/workstate";
 
 describe("phaseOf", () => {
   test("a turn going on is 回复中, its tasks or not", () => {
@@ -80,9 +81,36 @@ describe("workers", () => {
     expect(workers(one, ...of({ x: "reply" }, { x: [{ id: "1" }] }), true).map((w) => w.phase)).toEqual(["reply"]);
     expect(workers(one, ...of({ x: "back" }, { x: [{ id: "1" }] }), true).map((w) => w.phase)).toEqual(["back"]);
   });
-  test("three faces, then +N", () => {
+  test("three faces on a computer, two on a phone, the rest only counted", () => {
     expect(folded([1, 2])).toEqual({ shown: [1, 2], more: 0 });
     expect(folded([1, 2, 3, 4, 5])).toEqual({ shown: [1, 2, 3], more: 2 });
+    expect(folded([1, 2, 3], 2)).toEqual({ shown: [1, 2], more: 1 });
+  });
+});
+
+describe("looseSubs: the subagents at work no task stands for", () => {
+  const sub = (id: string, parent: string, x: Partial<Session> = {}) => ({ id, parent, subagent: true, title: `t-${id}`, createdAt: 5, ...x }) as Session;
+  const all = () => true;
+  test("under the agent they are of; a sub of the channel's own session under its first agent", () => {
+    const list = [sub("s1", "b"), sub("s2", "ch"), sub("s3", "elsewhere"), { id: "b", subagent: false } as Session];
+    const m = looseSubs(list, "ch", ["a", "b"], () => [], all);
+    expect([...m.entries()].map(([k, v]) => [k, v.map((x) => [x.id, x.type, x.description, x.since])])).toEqual([
+      ["b", [["s1", "subagent", "t-s1", 5]]],
+      ["a", [["s2", "subagent", "t-s2", 5]]],
+    ]);
+  });
+  test("one a task stands for (by its call, or its id), or not at work, is left out", () => {
+    const list = [sub("s1", "a", { call: "c1" }), sub("s2", "a"), sub("s3", "a")];
+    const m = looseSubs(list, "ch", ["a"], () => [{ id: "t", call: "c1" }, { id: "s2" }], (s) => s.id !== "s3");
+    expect(m.size).toBe(0);
+  });
+  test("no agents, none", () => {
+    expect(looseSubs([sub("s1", "ch")], "ch", [], () => [], all).size).toBe(0);
+  });
+  test("with workers: an agent idle but a sub at work counts as background", () => {
+    const loose = looseSubs([sub("s1", "y")], "ch", ["x", "y"], () => [], all);
+    const ws = workers([{ session: "x" }, { session: "y" }], () => "idle", (a) => loose.get(a.session) ?? [], false);
+    expect(ws.map((w) => [w.a.session, w.phase, w.running])).toEqual([["y", "back", 1]]);
   });
 });
 

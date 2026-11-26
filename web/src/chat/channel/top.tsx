@@ -14,17 +14,15 @@ import { agentsQ, isComputer, useApps, useMachines } from "../../data";
 import { t, useLang } from "../../i18n";
 import { useMachine } from "../../machines";
 import { prefetchRoles } from "../../roles";
-import { openChat } from "../../route";
 import { useCarried, useList, useSession } from "../../store";
-import { working } from "../../tree";
 import { toast } from "../../toast";
-import { agentName, Avatar, cn, Lamp, Tip, MenuPortal } from "../../ui";
+import { agentName, Avatar, cn, Tip, MenuPortal } from "../../ui";
 import { openEdit } from "./editing";
 import { Face, MemberFace } from "./face";
 import { ContextMark } from "../meters";
 import { mayAct, useMembers } from "./gate";
 import { AddAgents, ITEM, POPUP, type Wake } from "./invite";
-import { Deeper, Paged } from "./pages";
+import { Deeper, PageOf, Paged, usePaged, usePages } from "./pages";
 import { onAskAdd, takeAdd } from "./adding";
 import { prefetchChoices } from "./pick";
 import { useAhead } from "../../prefetch";
@@ -34,8 +32,8 @@ import { MemberAsks, MemberItems, type Ask } from "./members";
 import { ScriptFace, ScriptPop, scriptState, useScripts, type ScriptPage } from "./script";
 import { onOf, ruleLine } from "./scripts";
 import { triggerWords, useRecvName } from "./recv";
+import { WorkKey } from "./workkey";
 import { actsOf } from "./menu";
-import { subName, SubTag } from "../subwork";
 import { appAll, hasApp, hasLogin, loginOf, peopleOf, pressApp, pressLogin } from "./setup";
 
 const SUB = "no-bar max-h-[min(480px,50dvh,var(--available-height))] min-w-60 max-w-[calc(100vw-16px)] overflow-y-auto p-1.5";
@@ -98,19 +96,26 @@ export function TopRight({ id }: { id: string }) {
   // pressed (its members known).
   const may = mayAct(members);
   const [adding, setAdding] = useState(false);
+  // In the phone's layout no + of its own (kumo + Neon, 2026-11-26): the members' list has it at
+  // its first row's end, pushing 邀请 as its next page; opened by itself, the list opens on it.
+  const phone = usePaged();
+  const [listOpen, setListOpen] = useState(false);
+  const [inviteFirst, setInviteFirst] = useState(false);
   useEffect(() => {
-    const take = () => may && takeAdd(id) && (ahead(), setAdding(true));
+    const take = () => may && takeAdd(id) && (ahead(), phone ? (setInviteFirst(true), setListOpen(true)) : setAdding(true));
     take();
     return onAskAdd(take);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, may]);
+  }, [id, may, phone]);
   // Asked for as the bar is drawn: the list and each card open whole.
   useScripts(id);
   return (
     <span className="g-fade flex shrink-0 items-center gap-0.5">
+      {/* Who works, a key left of the members' (kumo + Neon, 2026-11-26). */}
+      <WorkKey id={id} />
       {/* Each kind's models asked for once idle and as the key is pointed at, pressed or opened,
           for 邀请's menus to pop at once (pick.tsx). */}
-      <Menu.Root onOpenChange={(open) => open && ahead()}>
+      <Menu.Root open={listOpen} onOpenChange={(open) => (setListOpen(open), open ? ahead() : setInviteFirst(false))}>
         <Tip label={t("channel.members")} side="bottom">
           <Menu.Trigger
             render={
@@ -139,7 +144,7 @@ export function TopRight({ id }: { id: string }) {
             <Menu.Popup finalFocus={false} className={cn(POPUP, SUB, "w-[min(344px,calc(100vw-16px))]")}>
               <Paged>
                 <div className="g-stagger flex flex-col">
-                  <MemberList id={id} viewers={viewers} ask={setAsked} script={(p) => requestAnimationFrame(() => setScript(p))} />
+                  <MemberList id={id} viewers={viewers} ask={setAsked} script={(p) => requestAnimationFrame(() => setScript(p))} inviteFirst={inviteFirst} done={() => setListOpen(false)} />
                 </div>
               </Paged>
             </Menu.Popup>
@@ -147,7 +152,7 @@ export function TopRight({ id }: { id: string }) {
         </MenuPortal>
       </Menu.Root>
       {/* 邀请, a key of its own (kumo, 2026-11-25): what it opens is the agents to add and the people. */}
-      {may && (
+      {may && !phone && (
         <Menu.Root open={adding} onOpenChange={(open) => (setAdding(open), open && ahead())}>
           <Tip label={t("channel.invite")} side="bottom">
             <Menu.Trigger
@@ -176,21 +181,46 @@ export function TopRight({ id }: { id: string }) {
 /** The members: who is looking first, if any; each agent a submenu, the menu its face has (members.tsx MemberItems; what it
  *  asks with, ask, drawn by the bar); the commands of its IR,
  *  each pressed its card (script), and 新建脚本; then 邀请. */
-function MemberList({ id, viewers, ask, script }: { id: string; viewers: Viewer[]; ask: (a: Ask) => void; script: (p: ScriptPage) => void }) {
+function MemberList({ id, viewers, ask, script, inviteFirst, done }: { id: string; viewers: Viewer[]; ask: (a: Ask) => void; script: (p: ScriptPage) => void; inviteFirst?: boolean; done: () => void }) {
   const list = useList();
   const scripts = useScripts(id) ?? [];
   const members = useMembers(id);
   const may = mayAct(members);
   const agents = (members?.members ?? []).filter((m) => m.session);
-  const own = list?.find((x) => x.id === id);
-  const subs = (list ?? []).filter((x) => x.subagent && x.parent === id && working(x, own, Date.now()));
   // What the channel's page lends: its composer's @, its way to a session's record.
   const lent = actsOf(id);
+  // The phone's +: at the first row's end, 邀请 its next page (kumo + Neon, 2026-11-26).
+  const pages = usePages();
+  const inviteId = `invite:${id}`;
+  const plus = !!pages && may;
+  const invite = () => pages && !pages.stack.some((p) => p.id === inviteId) && pages.push({ id: inviteId, title: t("channel.invite") });
+  useEffect(() => {
+    if (plus && inviteFirst) invite();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plus, inviteFirst]);
+  const first = viewers.length > 0 ? t("channel.viewing") : agents.length > 0 ? t("channel.agents") : "";
+  const head = (label: string) =>
+    plus && label === first ? (
+      <div className="flex items-center">
+        <div className={cn(HEAD, "min-w-0 flex-1 pt-1")}>{label}</div>
+        <button type="button" aria-label={t("channel.invite")} onClick={invite} className="g-press grid size-8 shrink-0 place-items-center rounded-md text-ink-2 hover:bg-fill hover:text-ink">
+          <Plus size={15} />
+        </button>
+      </div>
+    ) : (
+      <div className={HEAD}>{label}</div>
+    );
   return (
     <>
+      {plus && !first && head("")}
+      {plus && pages && (
+        <PageOf pages={pages} id={inviteId} title={t("channel.invite")}>
+          <InviteBody id={id} done={done} />
+        </PageOf>
+      )}
       {viewers.length > 0 && (
         <>
-          <div className={HEAD}>{t("channel.viewing")}</div>
+          {head(t("channel.viewing"))}
           {viewers.map((v) => (
             <div key={v.member} className="flex h-8 items-center gap-2.5 px-2.5 text-base pointer-coarse:h-9">
               <MemberFace member={v.member} name={v.name} size={18} />
@@ -200,7 +230,7 @@ function MemberList({ id, viewers, ask, script }: { id: string; viewers: Viewer[
         </>
       )}
       {/* No agents, no head for them (kumo, 2026-11-25). */}
-      {agents.length > 0 && <div className={HEAD}>{t("channel.agents")}</div>}
+      {agents.length > 0 && head(t("channel.agents"))}
       {agents.map((m) => {
         const row = list?.find((x) => x.id === m.session);
         const agent = m.agent ?? row?.agent ?? "claude";
@@ -211,15 +241,7 @@ function MemberList({ id, viewers, ask, script }: { id: string; viewers: Viewer[
           </Sub>
         );
       })}
-      {/* Its subagents at work (kumo, 2026-11-15): members that only read, pressed their record;
-          no @, no menu. */}
-      {subs.length > 0 && <div className={HEAD}>{t("channel.subsAtWork")}</div>}
-      {subs.map((x) => (
-        <Menu.Item key={x.id} onClick={() => openChat(x.id)} className={ITEM}>
-          <SubTag agent={x.agent} name={subName(x)} className="flex-1 gap-2.5" />
-          <Lamp status="running" />
-        </Menu.Item>
-      ))}
+      {/* Its subagents at work are in the work key's panel (workkey.tsx; kumo + Neon, 2026-11-26). */}
       {/* The channel's commands (docs/channels.md "命令"), if it has any: a row each, pressed its
           card. What wakes an agent is not listed here (kumo, 2026-11-24): it is the agent's own,
           in its 唤醒 and its 编辑资料. */}
@@ -254,6 +276,17 @@ function Commands({ id, scripts, script }: { id: string; scripts: Script[]; scri
 /** What the + beside the members' key opens (kumo, 2026-11-25): the agents to add (invite.tsx),
  *  then the people (an app a submenu of its logins). */
 function Invite({ id, done }: { id: string; done: () => void }) {
+  return (
+    <Paged>
+      <div className="g-stagger flex flex-col">
+        <InviteBody id={id} done={done} />
+      </div>
+    </Paged>
+  );
+}
+
+/** 邀请's rows: in the +'s own panel (Invite), or a page of the members' list on a phone. */
+function InviteBody({ id, done }: { id: string; done: () => void }) {
   const qc = useQueryClient();
   const members = useMembers(id);
   const d = useApps().data;
@@ -288,32 +321,28 @@ function Invite({ id, done }: { id: string; done: () => void }) {
   // In the phone's layout no menu beside a row (kumo, 2026-11-25): pressed, what it would open is
   // the panel's next page, pushed in (Paged), 返回 at its head.
   return (
-    <Paged>
-      <div className="g-stagger flex flex-col">
-        <AddAgents
-          id={id}
-          wake={wake}
-          setWake={setWake}
-          done={done}
-          apps={
-            apps.length > 0 ? (
-              <>
-                {apps.map((a) => {
-                const name = a.web ? t("term.panel") : a.name;
-                const now = hasApp(people, a.id) ? t("channel.everyone") : String(loginsOf(a.id).filter((l) => hasLogin(people, a.id, l.id)).length || "");
-                const icon = <Avatar src={a.avatar} name={a.name} size={16} type={a.type} host={!!a.host} />;
-                return (
-                  <Sub key={a.id} icon={icon} label={name} now={now} i={0} bare>
-                    {loginRows(a.id)}
-                  </Sub>
-                );
-              })}
-              </>
-            ) : undefined
-          }
-        />
-      </div>
-    </Paged>
+    <AddAgents
+      id={id}
+      wake={wake}
+      setWake={setWake}
+      done={done}
+      apps={
+        apps.length > 0 ? (
+          <>
+            {apps.map((a) => {
+            const name = a.web ? t("term.panel") : a.name;
+            const now = hasApp(people, a.id) ? t("channel.everyone") : String(loginsOf(a.id).filter((l) => hasLogin(people, a.id, l.id)).length || "");
+            const icon = <Avatar src={a.avatar} name={a.name} size={16} type={a.type} host={!!a.host} />;
+            return (
+              <Sub key={a.id} icon={icon} label={name} now={now} i={0} bare>
+                {loginRows(a.id)}
+              </Sub>
+            );
+          })}
+          </>
+        ) : undefined
+      }
+    />
   );
 }
 

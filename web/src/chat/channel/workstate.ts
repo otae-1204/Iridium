@@ -1,8 +1,8 @@
-// The work bar's state (workbar.tsx), pure for tests: who of a channel's agents is at work, and how.
+// The work key's state (workkey.tsx), pure for tests: who of a channel's agents is at work, and how.
 // An agent is 回复中 while its turn runs, 后台 once its turn is over and tasks of its still run
 // (Claude's background subagents and commands, Codex's subagents, dsh's jobs), else idle. A task
 // just ended stays a moment, marked done, then goes.
-import type { Task } from "../../api/types.gen";
+import type { Session, Task } from "../../api/types.gen";
 import type { Msg } from "./lib";
 
 export type Phase = "reply" | "back" | "idle";
@@ -67,9 +67,32 @@ export function workers<A extends { session: string }>(agents: A[], phase: (a: A
   return out;
 }
 
-/** The faces shown folded: at most MAX, the rest as "+N". */
+/** The faces shown folded: at most max (3 on a computer, 2 on a phone), the rest only counted. */
 export const MAX = 3;
-export const folded = <T>(ws: T[]): { shown: T[]; more: number } => ({ shown: ws.slice(0, MAX), more: Math.max(0, ws.length - MAX) });
+export const folded = <T>(ws: T[], max = MAX): { shown: T[]; more: number } => ({ shown: ws.slice(0, max), more: Math.max(0, ws.length - max) });
+
+/** A subagent's own session, where the list has it: Claude's by the call that started it, Codex's
+ *  and dsh's by its id. */
+export const subOf = (list: Session[] | undefined, parent: string, task: Pick<Task, "id" | "call">): Session | undefined =>
+  list?.find((s) => s.subagent && ((!!task.call && s.parent === parent && s.call === task.call) || s.id === task.id));
+
+/** The subagents at work no task of their agent's stands for (the members' old 在干活的子代理,
+ *  folded in: kumo, 2026-11-26), as tasks of the agent they are under: a sub of the channel's own
+ *  session goes to its first agent. at: whether one works now (tree.ts working); name: its words. */
+export function looseSubs(list: Session[] | undefined, channel: string, agents: string[], tasks: (session: string) => Pick<Task, "id" | "call">[], at: (s: Session) => boolean, name: (s: Session) => string = (s) => s.title ?? ""): Map<string, Task[]> {
+  const out = new Map<string, Task[]>();
+  if (!agents.length) return out;
+  for (const s of list ?? []) {
+    if (!s.subagent || !s.parent) continue;
+    const owner = agents.includes(s.parent) ? s.parent : s.parent === channel ? agents[0]! : undefined;
+    if (!owner || !at(s)) continue;
+    if (tasks(owner).some((t) => subOf([s], owner, t))) continue;
+    const l = out.get(owner) ?? [];
+    l.push({ id: s.id, type: "subagent", description: name(s), since: s.createdAt });
+    out.set(owner, l);
+  }
+  return out;
+}
 
 /** The message an agent's turn is writing now: its last one being written or at work. */
 export function writingOf(msgs: Msg[], session: string): Msg | undefined {
