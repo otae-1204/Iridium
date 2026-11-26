@@ -128,12 +128,17 @@ export function Reactions({ act }: { act: Act }) {
     return () => cancelAnimationFrame(f);
   }, [list.length > 0]);
   if (!shown.length) return null;
+  // Under a bubble (a person's: side given), riding its lower edge (kumo, 2026-11-26): up over it
+  // by 6px (its padding is 8, the words clear), a ring of the page's colour about each; a little
+  // in from its corner, many in a row and onto more as they need. An agent's words have no edge
+  // to ride: close under them.
+  const ride = !!act.side;
   return (
-    <div className="g-reveal" data-open={open && list.length ? "" : undefined}>
+    <div className={cn("g-reveal relative", ride && "-mt-2")} data-open={open && list.length ? "" : undefined}>
       <div className="min-h-0 overflow-hidden">
-        <div className={cn("flex flex-wrap gap-1 pt-1.5", act.side === "left" && "pl-[38px]", act.side === "right" && "justify-end pr-[38px]")}>
+        <div className={cn("flex flex-wrap gap-1", ride ? "py-0.5" : "pt-1", act.side === "left" && "pl-[46px]", act.side === "right" && "justify-end pr-[46px]")}>
           {shown.map((r) => (
-            <Chip key={r.emoji} r={r} on={r.users.some(mine)} press={act.may && id ? () => toggle(act, id, r.emoji, r.users.some(mine)) : undefined} />
+            <Chip key={r.emoji} r={r} on={r.users.some(mine)} ring={ride} press={act.may && id ? () => toggle(act, id, r.emoji, r.users.some(mine)) : undefined} />
           ))}
         </div>
       </div>
@@ -143,7 +148,7 @@ export function Reactions({ act }: { act: Act }) {
 
 /** One emoji under a message: pressed, yours on or off; its count (a long press, a right click
  *  on it) shows who put it on. */
-function Chip({ r, on, press }: { r: ReactionSum; on: boolean; press?: () => void }) {
+function Chip({ r, on, ring, press }: { r: ReactionSum; on: boolean; ring?: boolean; press?: () => void }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLSpanElement>(null);
   const lp = useLongPress(() => setOpen(true));
@@ -160,7 +165,7 @@ function Chip({ r, on, press }: { r: ReactionSum; on: boolean; press?: () => voi
           e.preventDefault();
           setOpen(true);
         }}
-        className={cn("g-fade inline-flex h-6 items-center rounded-full text-xs select-none [-webkit-touch-callout:none] pointer-coarse:h-7", on ? "bg-fill-2 text-ink shadow-[inset_0_0_0_0.5px_var(--edge)]" : "bg-fill text-ink-3")}
+        className={cn("g-fade inline-flex h-6 items-center rounded-full text-xs select-none [-webkit-touch-callout:none] pointer-coarse:h-7", on ? "bg-fill-2 text-ink shadow-[inset_0_0_0_0.5px_var(--edge)]" : "bg-fill text-ink-3", ring && "ring-2 ring-paper")}
       >
         <button type="button" disabled={!press} onClick={press} aria-label={r.emoji} aria-pressed={on} className="g-press grid h-full place-items-center pr-1 pl-2 text-sm leading-none">
           {r.emoji}
