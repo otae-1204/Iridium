@@ -1,5 +1,7 @@
 # 封存：主页小游戏（猫耳 Boss）
 
+**旧代码，已停用，不要拿来用。** 现行唯一的游戏是切水果（`src/splash/slice.ts`，由 `src/splash/engine.ts` 驱动；⋯ 菜单的 Game 也是它）。没有 kumo 明说，不要恢复或搬用这里的任何代码（kumo，2026-11-26）。
+
 2026-11-26 封存（kumo）。不参与构建：`attic/` 不在 `tsconfig.json` 的 include 里，没有任何文件引用它。
 
 - `game.ts`：游戏本体（Boss、子代理、技能、血条与防御、折线火箭），只给已有字符上色，不加字符。

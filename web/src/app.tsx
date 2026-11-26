@@ -11,7 +11,7 @@ import { Dialog } from "@base-ui/react/dialog";
 import { Menu } from "@base-ui/react/menu";
 import { Toast } from "@base-ui/react/toast";
 import { Tooltip } from "@base-ui/react/tooltip";
-import { BarChart3, Ellipsis, FolderOpen, ListTree, Settings } from "lucide-react";
+import { BarChart3, Ellipsis, FolderOpen, Gamepad2, ListTree, Settings } from "lucide-react";
 import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties, type ReactNode } from "react";
 import { api, queryClient } from "./api/client";
 import { InPopup } from "./api/query";
@@ -43,6 +43,7 @@ import { reloadAgain } from "./upgrade";
 import { cn, IrMark, kept, keep, params, PHONE, useMedia, useMinute, DialogPortal, MenuPortal } from "./ui";
 import { watchUnread } from "./unread";
 import { warmUp } from "./warm";
+import { openGame, useGameOpen } from "./game/open";
 
 /** A part that comes only as it is opened, or the page is idle. Once its code came it is drawn
  *  straight, not through lazy, whose first draw shows the fallback even with the code at hand
@@ -82,6 +83,15 @@ const RolesPage = part(() => import("./rolespage").then((m) => m.RolesPage));
 const CachePage = part(() => import("./device/page").then((m) => m.CachePage));
 const UsagePage = part(() => import("./usage").then((m) => m.UsagePage));
 const PaneSplash = lazy(() => import("./splash/splash").then((m) => ({ default: m.PaneSplash })));
+// The ⋯ menu's Game, over the pane (game/overlay.tsx): loaded as it is first opened.
+const GameLayer = lazy(() => import("./game/overlay"));
+function GameMount() {
+  return useGameOpen() && (
+    <Suspense fallback={null}>
+      <GameLayer />
+    </Suspense>
+  );
+}
 const FileBrowserKey = part(() => import("./filebrowser-key").then((m) => m.FileBrowserKey));
 const FileBrowser = part(() => loadFileBrowser().then((m) => m.default));
 /** The page of the settings' dialog a route is: the settings, or one of their own pages. */
@@ -431,6 +441,7 @@ export function App() {
           )}
         </Suspense>
       </FileBrowserHandle.Provider>
+      <GameMount />
     </main>
   );
 
@@ -589,7 +600,7 @@ const PICK_WORDS = "min-w-0 flex-1 self-center truncate px-0.5 py-1 text-md lead
 /** The main pane with nothing open: the splash in its middle, a box where a chat's composer is. */
 function Empty({ below, onSheet, onMe, onSide }: { below: number; onSheet?: () => void; onMe?: () => void; onSide?: () => void }) {
   // What ⋯ has with no chat open (kumo, 2026-11-25): the list, the settings, the usage.
-  const lead = [...(onSheet ? [{ icon: <ListTree size={15} />, label: t("nav.sidebar"), run: onSheet }] : []), ...(onMe ? [{ icon: <Settings size={15} />, label: t("nav.me"), run: onMe }] : []), { icon: <BarChart3 size={15} />, label: t("usage.title"), run: () => openUsage() }];
+  const lead = [...(onSheet ? [{ icon: <ListTree size={15} />, label: t("nav.sidebar"), run: onSheet }] : []), ...(onMe ? [{ icon: <Settings size={15} />, label: t("nav.me"), run: onMe }] : []), { icon: <BarChart3 size={15} />, label: t("usage.title"), run: () => openUsage() }, { icon: <Gamepad2 size={15} />, label: t("game.open"), run: openGame }];
   return (
     <div className="relative grid h-full place-items-center transition-[padding] duration-(--dur-3) ease-(--ease-out)" style={{ paddingBottom: below }}>
       {/* Where a chat's composer is, its look: pressed, the file browser, a channel made in the

@@ -144,12 +144,13 @@ export const ahead = (f: Fig) => void (f.src && picture(f.src));
 // anew (kumo, 2026-11-25: it blinked).
 let kept: { at: number; cols: number; rows: number; text: string[][]; off: Float32Array<ArrayBuffer>; speed: Float32Array<ArrayBuffer>; cur: Field; key: string } | null = null;
 
-export type Splash = { leave(done: () => void): void; enter(): void; figure(f: Fig | null): void; place(x: number, side: number, y?: number): void; foot(y: number): void; window(middle: number, height: number): void; recolor(): void; power(f: number): void; resize(): void; near(x: number, y: number): void; tap(x: number, y: number): void; hold(on: boolean): void; stop(): void; edge(on: boolean): void;  cast(who: Cast[]): void; onPlay(h: (on: boolean) => void): void };
+export type Splash = { leave(done: () => void): void; enter(): void; figure(f: Fig | null): void; place(x: number, side: number, y?: number): void; foot(y: number): void; window(middle: number, height: number): void; recolor(): void; power(f: number): void; resize(): void; near(x: number, y: number): void; tap(x: number, y: number): void; hold(on: boolean): void; stop(): void; edge(on: boolean): void;  cast(who: Cast[]): void; onPlay(h: (on: boolean) => void): void; play(done: () => void): boolean };
 
 
 /** fine: smaller characters, more of them to a figure (the portrait layout, where the band is
- *  narrow and a figure of few cells is a blur: kumo, 2026-11-25). */
-export function splash(cv: HTMLCanvasElement, still: boolean, fine = false): Splash {
+ *  narrow and a figure of few cells is a blur: kumo, 2026-11-25). apart: not the pane's band (the
+ *  ⋯ menu's Game, game/overlay.tsx): nothing of it kept for the next one, nor taken. */
+export function splash(cv: HTMLCanvasElement, still: boolean, fine = false, apart = false): Splash {
   const FONT = fine ? 7 : FONT_PX, ROW = fine ? 8 : ROW_PX;
   const g = cv.getContext("2d")!;
   const src = document.createElement("canvas");
@@ -540,7 +541,7 @@ export function splash(cv: HTMLCanvasElement, still: boolean, fine = false): Spl
   // laid over the code each frame (sp, 0xAABBGGRR a cell; 0: none) and put back to none the next.
   let sp = new Uint32Array(0), spCells = new Int32Array(0), nSp = 0;
   // The page told as the game begins and is over: its bars go for it and come back (splash.tsx).
-  let told: ((on: boolean) => void) | null = null, playing = false;
+  let told: ((on: boolean) => void) | null = null, playing = false, done: (() => void) | null = null;
   const tell = (on: boolean) => void (on !== playing && ((playing = on), told?.(on)));
   const sl = slicer({
     W: () => W,
@@ -609,6 +610,9 @@ export function splash(cv: HTMLCanvasElement, still: boolean, fine = false): Spl
         d = oc.getImageData(0, 0, w, h).data;
       } catch {
         return null; // a picture not ours to read
+      } finally {
+        // Let go at once: WebKit holds a canvas's memory till its size is 0.
+        c.width = c.height = mid.width = mid.height = out.width = out.height = 0;
       }
       const px = new Uint32Array(w * h);
       for (let j = 0; j < w * h; j++) {
@@ -627,7 +631,7 @@ export function splash(cv: HTMLCanvasElement, still: boolean, fine = false): Spl
     },
     // The pane's bars come back as its count comes (kumo, 2026-11-26), not once that is gone.
     ended: () => tell(false),
-    over: () => (tell(false), kick()),
+    over: () => (tell(false), done?.(), (done = null), kick()),
     dark: () => dark,
   });
 
@@ -1033,7 +1037,7 @@ export function splash(cv: HTMLCanvasElement, still: boolean, fine = false): Spl
           const i = r * cols + k, j = r * was.cols + k;
           (cur.a[i] = was.cur.a[j]!), (cur.r[i] = was.cur.r[j]!), (cur.g[i] = was.cur.g[j]!), (cur.b[i] = was.cur.b[j]!);
         }
-    if (!grown && kept && kept.cols === cols && kept.rows === rows && performance.now() - kept.at < 2000) {
+    if (!apart && !grown && kept && kept.cols === cols && kept.rows === rows && performance.now() - kept.at < 2000) {
       ({ text, off, speed, cur } = kept);
       from = cur;
       first = false;
@@ -1170,12 +1174,25 @@ export function splash(cv: HTMLCanvasElement, still: boolean, fine = false): Spl
     },
     cast: (who) => sl.cast(who),
     onPlay: (h) => void (told = h),
+    // The game begun at once, no zigzag drawn first (the ⋯ menu's Game): false while the letters
+    // are not drawn yet. done: when it is over, its count gone.
+    play(then) {
+      if (sl.on()) return true;
+      if (still || !W || !rainbow || leaving || left) return false;
+      done = then;
+      sl.start();
+      tell(true);
+      kick();
+      return true;
+    },
     stop() {
       sl.stop();
       tell(false);
-      if (cols && rows && !leaving && !left) kept = { at: performance.now(), cols, rows, text, off, speed, cur, key: drawnKey };
+      done = null;
+      if (!apart && cols && rows && !leaving && !left) kept = { at: performance.now(), cols, rows, text, off, speed, cur, key: drawnKey };
       dead = true;
       cancelAnimationFrame(raf);
+      if (apart) for (const c of [src, small, tiny]) c.width = c.height = 0;
     },
   };
 }

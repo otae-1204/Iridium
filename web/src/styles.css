@@ -771,11 +771,11 @@ body {
     opacity: 0;
   }
 }
-html[data-playing="1"] main > :not([data-splash]) {
+html[data-playing="1"] main > :not([data-splash], [data-game]) {
   animation: play-out 0.35s ease-out forwards;
   pointer-events: none;
 }
-html[data-playing="0"] main > :not([data-splash]) {
+html[data-playing="0"] main > :not([data-splash], [data-game]) {
   animation: play-in 1.4s ease-out;
 }
 html[data-playing="1"],
@@ -785,4 +785,56 @@ html[data-playing="1"] body {
 }
 html[data-playing="1"] main {
   touch-action: none;
+}
+
+/* The ⋯ menu's Game (game/overlay.tsx): the pane's bar goes up and its composer down, faded, the
+   page between them left as it is under the game's veil (not html[data-playing], which takes the
+   whole page away); they come back the same way after. */
+@keyframes game-bar {
+  to {
+    translate: 0 -110%;
+    opacity: 0;
+  }
+}
+@keyframes game-stack {
+  to {
+    translate: 0 110%;
+    opacity: 0;
+  }
+}
+@keyframes game-bar-back {
+  from {
+    translate: 0 -110%;
+    opacity: 0;
+  }
+}
+@keyframes game-stack-back {
+  from {
+    translate: 0 110%;
+    opacity: 0;
+  }
+}
+html[data-gaming="1"] main [data-app-drag] {
+  animation: game-bar 0.38s var(--ease-out) forwards;
+  pointer-events: none;
+}
+html[data-gaming="1"] main [data-sheet-pull] {
+  animation: game-stack 0.38s var(--ease-out) forwards;
+  pointer-events: none;
+}
+html[data-gaming="0"] main [data-app-drag] {
+  animation: game-bar-back 0.42s var(--ease-out) both;
+}
+html[data-gaming="0"] main [data-sheet-pull] {
+  animation: game-stack-back 0.42s var(--ease-out) both;
+}
+html[data-gaming="1"],
+html[data-gaming="1"] body {
+  overscroll-behavior: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-gaming] main [data-app-drag],
+  html[data-gaming] main [data-sheet-pull] {
+    animation-duration: 1ms;
+  }
 }

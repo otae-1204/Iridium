@@ -4,7 +4,7 @@
 // raw session record (?record=1).
 import { Menu } from "@base-ui/react/menu";
 import { Popover } from "@base-ui/react/popover";
-import { ArrowLeft, BarChart3, Ellipsis, House, ListTree, Plus, Settings } from "lucide-react";
+import { ArrowLeft, BarChart3, Ellipsis, Gamepad2, House, ListTree, Plus, Settings } from "lucide-react";
 import { lazy, memo, Suspense, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import { lazyAhead, useAhead } from "../prefetch";
 import type { Device, Session, SessionState as LiveSession } from "../api/types.gen";
@@ -24,6 +24,7 @@ import { drafts, opened } from "../stream";
 import { groupPath } from "../tree";
 import { agentName, cn, IrMark, lampOf, LogoLamp, PopSurface, sessionStatusText, Tip, titleOf, untitled, MenuPortal } from "../ui";
 import { VoiceDock } from "../voice/dock";
+import { openGame } from "../game/open";
 import { Activity } from "./atwork";
 import { ChannelCard } from "./channel/channelcard";
 import { EditBody } from "./channel/edit";
@@ -222,7 +223,7 @@ const Bar = memo(function Bar({ s, onSheet, onMe, onSide, onBack, recordOnly }: 
   const moreAhead = useAhead(ChannelMenu.ahead, []);
   const usageHere = () => openUsage(s?.machine);
   // 回到主页 (kumo, 2026-11-25): the pane with no chat open, its splash.
-  const lead = [{ icon: <House size={15} />, label: t("menu.home"), run: () => go({ name: "home" }) }, { icon: <Plus size={15} />, label: t("menu.new"), run: () => s && void newChannel(groupPath(s), machines, s.workspace ?? undefined).then((id) => id && openChat(id)) }, ...(onSheet ? [{ icon: <ListTree size={15} />, label: t("nav.sidebar"), run: onSheet }] : []), ...(onMe ? [{ icon: <Settings size={15} />, label: t("nav.me"), run: onMe }] : []), { icon: <BarChart3 size={15} />, label: t("usage.title"), run: usageHere }];
+  const lead = [{ icon: <House size={15} />, label: t("menu.home"), run: () => go({ name: "home" }) }, { icon: <Plus size={15} />, label: t("menu.new"), run: () => s && void newChannel(groupPath(s), machines, s.workspace ?? undefined).then((id) => id && openChat(id)) }, ...(onSheet ? [{ icon: <ListTree size={15} />, label: t("nav.sidebar"), run: onSheet }] : []), ...(onMe ? [{ icon: <Settings size={15} />, label: t("nav.me"), run: onMe }] : []), { icon: <BarChart3 size={15} />, label: t("usage.title"), run: usageHere }, { icon: <Gamepad2 size={15} />, label: t("game.open"), run: openGame }];
   const acts = s ? [...sessionActions(s, () => setRenaming(true))] : [];
   return (
     <header data-app-drag className="g-turn-stay vt-bar glass absolute inset-x-0 top-0 z-20 shadow-[0_0.5px_0_var(--edge)]">
