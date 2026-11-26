@@ -1,31 +1,27 @@
-// The 终端 panel (plan "运行", "推送", "更新", "网页", "交互终端"): this terminal and the settings in
-// one (the user, 2026-11-07), one list with no groups: its profile and device badge, appearance,
-// language; for those who manage, the 终端, 凭据 and 用量 pages; Web Push and, while it is on, the events
-// it pushes where no workspace, folder or session says otherwise (push.ts: their menus); what
-// sending does while a turn runs; the update; signing out. Not here (the user, 2026-11-08): its
-// permissions (the 终端 page shows each terminal's) and the approval mode of new sessions (the
+// The 终端 panel (plan "运行", "更新", "网页", "交互终端"): this terminal and the settings in one
+// (the user, 2026-11-07), one list with no groups: its profile and device badge, appearance,
+// language; for those who manage, the 终端, 凭据 and 用量 pages; the update; signing out. No Web
+// Push and no 自动更新 (kumo, 2026-11-26: both gone, updates only by hand). Not here (the user,
+// 2026-11-08): its permissions (the 终端 page shows each terminal's) and the approval mode of new sessions (the
 // config file's, else each agent's own). Each a title and its control, no line explaining it;
 // no version shown, no head, signing out a plain row, asked once (the user, 2026-11-08). Every quota bar shows: nothing here hides one.
 // Changed is saved at once (GET/PUT /v1/internal/settings). Reaping idle agents and going on after a crash
 // or a quota are not here: as the config file says, by default 1h and on (the user, 2026-11-07).
-import { useQueryClient } from "@tanstack/react-query";
-import { useQuery } from "./api/query";
 import { ChevronLeft, ChevronRight, LoaderCircle, LogOut, MonitorDown, RefreshCw, Share, SquarePlus } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "./api/client";
-import type { PushEvents, PushState, Settings, SettingsPatch, UpdateState } from "./api/types.gen";
+import type { UpdateState } from "./api/types.gen";
 import { CacheTotal } from "./device/total";
 import { ahead as cacheAhead } from "./device/state";
-import { manages as managesApps, pushQ, useApps, useMe, useSettings, useUpdate } from "./data";
+import { manages as managesApps, useApps, useMe, useUpdate } from "./data";
 import { t, useLang } from "./i18n";
 import { install, useInstall } from "./install";
 import { LangSwitch, ThemeSwitch, type ThemePref } from "./me";
 import { AvatarCrop, Profile } from "./profile";
-import { PUSH_EVENTS, subscribe } from "./pushmenu";
 import { go } from "./route";
 import { useConfirms } from "./store";
 import { errText, toast } from "./toast";
-import { cn, IconKey, Switch, Tip } from "./ui";
+import { cn, IconKey, Tip } from "./ui";
 import { UpdateAsk } from "./updateask";
 
 /** The panel's own pages: the avatar's crop. */
@@ -33,57 +29,13 @@ export type Page = "main" | "crop";
 
 /** In a small dialog rising from the me key (app.tsx); on a phone a sheet from the window's foot (the
  *  user, 2026-11-06). No close key: a press anywhere else puts it away (the user, 2026-11-06).
- *  initial: the page it opens on. */
-export function SettingsPage({ theme, setTheme, initial = "main" }: { theme: ThemePref; setTheme: (v: ThemePref) => void; initial?: Page }) {
+ *  initial: the page it opens on; shown: out in front (a phone's sheet keeps it drawn when put away). */
+export function SettingsPage({ theme, setTheme, initial = "main", shown = true }: { theme: ThemePref; setTheme: (v: ThemePref) => void; initial?: Page; shown?: boolean }) {
   const lang = useLang();
-  const qc = useQueryClient();
-  const q = useSettings();
-  const s = q.data ?? undefined;
-  const off = !s; // not come yet, or an older daemon
   const me = useMe().data;
   const manages = managesApps(me);
   const terminals = useApps().data?.apps ?? [];
   const confirms = useConfirms();
-  const upd = useUpdate().data;
-  const put = async (p: SettingsPatch) => {
-    if (!s) return;
-    const next: Settings = { ...s, ...(p as Partial<Settings>), modes: p.modes ? Object.fromEntries(Object.entries({ ...s.modes, ...p.modes }).filter(([, v]) => v)) : s.modes, quotaHidden: p.quotaHidden ?? s.quotaHidden };
-    qc.setQueryData(["settings"], next);
-    try {
-      qc.setQueryData(["settings"], await api.putSettings(p));
-    } catch (e) {
-      qc.setQueryData(["settings"], s);
-      toast(t("err.settings"), { error: true, description: errText(e) });
-    }
-  };
-  const pq = useQuery(pushQ);
-  const push: PushState | null | undefined = pq.data;
-  const setDefault = (k: keyof PushEvents, on: boolean) => {
-    if (!push) return;
-    const next = { ...push.defaults, [k]: on };
-    qc.setQueryData(["push"], { ...push, defaults: next });
-    api.pushDefaults(next).then(
-      (st) => qc.setQueryData(["push"], st),
-      (e) => (qc.invalidateQueries({ queryKey: ["push"] }), toast(t("err.settings"), { error: true, description: errText(e) })),
-    );
-  };
-  const [pushing, setPushing] = useState(false);
-  const pushed = s?.push ?? push?.enabled ?? false;
-  const pushOn = async (on: boolean) => {
-    if (!push) return;
-    setPushing(true);
-    try {
-      if (on) await subscribe(push.publicKey);
-      if (s) qc.setQueryData(["settings"], await api.putSettings({ push: on }));
-      else await api.pushSwitch(on);
-      qc.setQueryData(["push"], { ...push, enabled: on });
-    } catch (e) {
-      toast(t("err.push"), { error: true, description: errText(e) });
-    } finally {
-      setPushing(false);
-    }
-  };
-
   const [page, setPage] = useState<Page>(initial);
   const [picture, setPicture] = useState<string | null>(null);
   const back = () => setPage("main");
@@ -136,35 +88,7 @@ export function SettingsPage({ theme, setTheme, initial = "main" }: { theme: The
           {nav(t("role.title"), () => go({ name: "roles" }))}
           {nav(t("cache.title"), () => go({ name: "cache" }), <CacheTotal />, cacheAhead)}
           <InstallItem />
-          <Item label={t("settings.pushOn")}>
-            {pushing ? <LoaderCircle size={16} className="animate-spin text-ink-3" /> : <Switch label={t("settings.pushOn")} disabled={!push || !("PushManager" in window)} on={pushed} onChange={(v) => void pushOn(v)} />}
-          </Item>
-          {/* On, the default events slide open under it (off, shut): nothing below jumps. */}
-          <div aria-hidden={!pushed || undefined} inert={!pushed || undefined} className="g-reveal" data-open={pushed && push ? "" : undefined}>
-            <div className="min-h-0 overflow-hidden pl-3">
-              {push &&
-                PUSH_EVENTS.map((e) => (
-                  <Item
-                    key={e.k}
-                    label={
-                      <span className="flex items-center gap-2">
-                        <span className="text-ink-3">{e.icon}</span>
-                        {t(e.label)}
-                      </span>
-                    }
-                  >
-                    <Switch label={t(e.label)} on={push.defaults[e.k]} onChange={(v) => setDefault(e.k, v)} />
-                  </Item>
-                ))}
-            </div>
-          </div>
-          {/* 自动更新: off, nothing is looked for or downloaded unasked; 检查更新 still does it all. */}
-          {manages && upd?.source && (
-            <Item label={t("settings.autoUpdate")}>
-              <Switch label={t("settings.autoUpdate")} disabled={off} on={s?.autoUpdate ?? !upd.manual} onChange={(v) => void put({ autoUpdate: v })} />
-            </Item>
-          )}
-          <UpdateItem manages={manages} />
+          <UpdateItem manages={manages} shown={shown} />
           {me && !me.host && <SignOut />}
         </div>
       </div>
@@ -221,8 +145,7 @@ export function Item({ label, hint, children, below }: { label: ReactNode; hint?
   );
 }
 
-/** 添加到主屏幕 (install.ts), above Web Push (an iPhone pushes only to a page on its home screen):
- *  the browser's prompt on a key, 安装为应用 on a computer; on iOS and Safari on a Mac, whose
+/** 添加到主屏幕 (install.ts): the browser's prompt on a key, 安装为应用 on a computer; on iOS and Safari on a Mac, whose
  *  browsers keep it in their own menu, that menu's name. */
 function InstallItem() {
   const how = useInstall();
@@ -248,11 +171,6 @@ function InstallItem() {
   );
 }
 
-
-/** Looking again on its own: a page that opens the settings with the last look over an hour ago
- *  asks for one (the daemon looks once a day by itself). */
-const STALE = 3_600_000;
-
 /** 检查更新, the update in one row (the user, 2026-11-09: no notice above the profile). Up to date,
  *  检查更新 with the version now (the user, 2026-11-12: not 已是最新; when it last looked in its tip) and a key that looks; a newer
  *  release found, it asks first (otae, 2026-11-22: never updated by the look alone): a popup out of
@@ -260,9 +178,11 @@ const STALE = 3_600_000;
  *  and its size, 取消 or 更新, the one 更新 there is, which downloads it, puts it in place and
  *  restarts; the page then loads the new build (the user, 2026-11-08). A newer one out, the row is
  *  版本 with its version, pressed the same popup (no key of its own: two 更新 were one too many,
- *  otae), or how far its download is, a hairline along the row's foot. Those who do not manage see the versions, no key. Release builds download a newer one ahead
- *  by themselves unless 自动更新 is off (u.manual); then the page does not look on opening either. */
-function UpdateItem({ manages }: { manages: boolean }) {
+ *  otae), or how far its download is, a hairline along the row's foot. Those who do not manage see the versions, no key. The daemon
+ *  never looks or downloads by itself (kumo, 2026-11-26): each time the settings open, for those
+ *  who manage where there is a source, the page looks once (not again while a look runs; a failure
+ *  quiet, the row says it). */
+function UpdateItem({ manages, shown }: { manages: boolean; shown: boolean }) {
   const lang = useLang();
   const u = useUpdate().data;
   const [busy, setBusy] = useState(false);
@@ -279,12 +199,17 @@ function UpdateItem({ manages }: { manages: boolean }) {
       () => setBusy(false), // quiet: the status says it failed
     );
   };
-  // Opened with the last look stale: look now, saying nothing if it fails.
-  const stale = manages && !!u?.source && !u.manual && u.phase === "idle" && Date.now() - (u.checkedAt ?? 0) > STALE;
+  // Each opening looks once, as soon as it is known there is a source; one already running (another
+  // page's, an update's) is this opening's. Put away, the next opening looks again.
+  const may = shown && manages && !!u?.source;
+  const looked = useRef(false);
   useEffect(() => {
-    if (stale) look();
+    if (!shown) looked.current = false;
+    if (!may || looked.current) return;
+    looked.current = true;
+    if (!working) look();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stale]);
+  }, [may, shown]);
   if (!u) return null;
   // Kept while the daemon restarts (available is off by then): the row does not change back as the
   // new build loads.

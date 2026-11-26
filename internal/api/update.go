@@ -8,14 +8,6 @@ type UpdateState struct {
 	Notes     string `json:"notes,omitempty"`
 	Available bool   `json:"available"`
 	Source    bool   `json:"source"` // an update source is configured
-	// Auto: a newer version is downloaded as soon as it is seen (release builds; not a build from
-	// source).
-	Auto bool `json:"auto"`
-	// Manual: automatic updates are off (config update.manual): nothing looked for on a timer or
-	// downloaded ahead; the page does not look when the settings open.
-	Manual bool `json:"manual,omitempty"`
-	// Ready: Latest is downloaded and checked; 更新 only swaps it in and restarts.
-	Ready bool `json:"ready,omitempty"`
 	// Size is Latest's download in bytes (0 unknown); Got how much of it came, while downloading.
 	Size      int64 `json:"size,omitempty"`
 	Got       int64 `json:"got,omitempty"`

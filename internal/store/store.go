@@ -1,8 +1,10 @@
 // Package store is Iridium's database: SQLite through a pure-Go driver, WAL, writes in BEGIN
 // IMMEDIATE transactions. It holds only what lies over the sessions found on disk (plan "数据"):
-// workspaces and who belongs where, pins, colour tags, which sessions are shown, names, the queue of messages to send, push
-// subscriptions, apps, their logins and their permissions, usage, the event outbox, and
-// the credentials, sealed (secrets.go). Never the conversations themselves, nor asks.
+// workspaces and who belongs where, pins, colour tags, which sessions are shown, names, the queue
+// of messages to send, apps, their logins and their permissions, usage, the event outbox, and the
+// credentials, sealed (secrets.go). Never the conversations themselves, nor asks. Web Push's
+// tables (push_subscriptions, push_rules) are left from before, read by nothing (kumo,
+// 2026-11-26: Web Push is gone).
 package store
 
 import (

@@ -229,10 +229,14 @@ func TestMigrateToApps(t *testing.T) {
 		t.Errorf("devices: %v", d)
 	}
 	// Push: the host's and mac's stay; the app's and the gone one's go.
-	subs, _ := s.PushSubscriptions()
 	var who []string
-	for _, p := range subs {
-		who = append(who, p.Terminal)
+	if rows, err := s.db.Query(`SELECT terminal FROM push_subscriptions ORDER BY id`); err == nil {
+		for rows.Next() {
+			var w string
+			rows.Scan(&w)
+			who = append(who, w)
+		}
+		rows.Close()
 	}
 	if len(who) != 2 || who[0] != gate.HostID || who[1] != f.Mac {
 		t.Errorf("push subscriptions: %v", who)

@@ -5,8 +5,7 @@
 // browser (the counts, and when each session last spoke as this page last saw it), so a page
 // loaded again has them, and one that spoke while no page was open counts one. A session is in
 // front of you too while the chat open is a channel it is in.
-// The page shows no notification of its own: Web Push does, with the page open or not (the
-// user, 2026-11-08).
+// No notification is shown, by the page or otherwise (Web Push is gone: kumo, 2026-11-26).
 //
 // Quiet (免打扰): its badge is grey and it is left out of the title's count. A session another
 // app or login opened is quiet unless said otherwise, yours is not; said in its menu, kept in

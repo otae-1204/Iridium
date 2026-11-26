@@ -44,7 +44,7 @@
 
 - 能在频道里发话的成员（人、应用、agent 一样）都能撤回频道里任何一条话（人的、agent 的、脚本的），不限时间：Satori 的 `message.delete`，`message_id` 是编号。提问和 Iridium 自己的行不能撤。
 - 撤回后所有人那里都没有了：内容、表情、指向它的“有人 @ 我”标记一起去掉，搜索不到，`block.list` 里它那一块也不给（agent 自己的记录还在）；编号和出处（`ref`）留着，记录再读进来时不会重新出现。存在 `channel_recalls`（迁移 45）。
-- 频道记一行 Iridium 自己的话“X 撤回了一条消息”（`event` 是 `recall`，`seq`、`member`、`by`），不算未读、不推送、不给 agent。发 `message-deleted`。侧栏那一行的最后一句重算；引用它的消息，引用框写“#n（已撤回）”。
+- 频道记一行 Iridium 自己的话“X 撤回了一条消息”（`event` 是 `recall`，`seq`、`member`、`by`），不算未读、不给 agent。发 `message-deleted`。侧栏那一行的最后一句重算；引用它的消息，引用框写“#n（已撤回）”。
 - 还在 agent 队列里的副本撤下。已经给过的 agent，下次在这个频道被叫起时，频道上下文里有一行“这些编号撤回了”（`channel.context.recalled`）。只告诉 agent 用法：`ir api help message.delete`，系统提示里不提。
 - 网页：消息右键（长按）菜单最后一项“撤回”，按一次变红“确认撤回”，再按才撤。单 agent 的会话也有（它的频道也是频道）。
 
@@ -124,7 +124,7 @@
 - 页面：携带状态 `ats`（每条连接只带自己的），`GET /v1/internal/ats`。跨设备一致。
 - 侧栏那一行第二行前面加红字“[@我]”，只是全体的是“[@全体成员]”，后面照常是“谁: 最后一句”。
 - 有标记的频道：免打扰时未读角标也是红的，标题和应用角标把它算进去。
-- 推送：点到谁就推给谁的浏览器（`kind` 是 `at`），不看这个会话的推送规则和免打扰，只看总开关；不推给说话的人。
+- 推送：Web Push 已删（2026-11-26），点到谁只记标记、算未读，不推。
 - 只记第一条：读到它就清掉，它之后、还没读到的点名不再有标记。
 
 ## 资料（kumo，2026-11-16）
@@ -137,7 +137,7 @@
 - 谁能改：频道里的任何成员（人、agent）都能改这个频道和里面任何 agent 的资料；人和应用还要有用那个会话的权限。人的资料只有本人能改。
 - 接口：`GET`、`PATCH /v1/internal/self`（自己）；`GET`、`PATCH /v1/internal/members/{称呼|会话|登录名}`；`GET /v1/internal/channels/{id}/profile`、`PATCH /v1/internal/channels/{id}`（`here` 是 agent 正在为之干活的频道）。`ir api help profile`。
 - 开会话时一并给：`channel.create` 的 `_data.nick`、`_data.intro`、`_data.persona`、`_data.avatar`、`_data.background`；邀请同理。agent 开会话没给资料时，`ir` 在标准错误里提示一句。
-- 改了资料，频道里记一行灰字（`event.type` 是 `profile`，`what` 列出改了哪几项），不计未读、不推送；同一个人接连改同一张卡只留一行。改称呼仍是 `rename`。
+- 改了资料，频道里记一行灰字（`event.type` 是 `profile`，`what` 列出改了哪几项），不计未读；同一个人接连改同一张卡只留一行。改称呼仍是 `rename`。
 - 告诉 agent：不叫起谁。每个 agent 在每个频道记着上次告诉它的资料（`profile_told`），下次被叫起时和现在的比，不同的写在 `<channel-context>` 里“Profiles changed”一节：改名、头像或背景换了。它自己改的不再告诉它。别人改了它的设定，只告诉它自己，写出新的全文。频道的固定说明不再因为改名重给：说明的键只看片段文字、是哪个频道、有哪些 agent。
 
 ## 角色（kumo，2026-11-16）

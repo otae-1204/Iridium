@@ -247,8 +247,8 @@ var pageLog = sync.OnceValue(appLog)
 //     the page go there, and did nothing for target=_blank: kumo, 2026-11-23);
 //   - a download is saved in Downloads (one from its Iridium fetched by the app, its toast saying
 //     how far: download.go), then shown in Finder or Explorer (Wails dropped them);
-//   - the microphone, the camera and notifications are its own Iridium's (voice rooms), nothing
-//     else is; no other page gets anything;
+//   - the microphone and the camera are its own Iridium's (voice rooms), nothing else is; no
+//     other page gets anything;
 //   - its web process gone (killed by the system: WebKit's 8 GB a page, kumo, 2026-11-23, the
 //     window white from then on, its keys dead with the page), the page is loaded again, and
 //     the log says so. Not one gone again within a minute: that page does not stay up, and the
@@ -343,7 +343,7 @@ func guard(w *mygo.Window, origin string) {
 			return false
 		}
 		for _, k := range r.Permissions {
-			if k != mygo.PermissionMicrophone && k != mygo.PermissionCamera && k != mygo.PermissionNotifications {
+			if k != mygo.PermissionMicrophone && k != mygo.PermissionCamera {
 				return false
 			}
 		}

@@ -1,14 +1,7 @@
 package server
 
 import (
-	"crypto/ecdh"
-	"crypto/rand"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
@@ -16,7 +9,6 @@ import (
 
 	"github.com/kumoSleeping/iridium/internal/api"
 	"github.com/kumoSleeping/iridium/internal/gate"
-	"github.com/kumoSleeping/iridium/internal/push"
 	"github.com/kumoSleeping/iridium/internal/satori"
 )
 
@@ -242,52 +234,6 @@ func TestChannelAtsAmongSeveral(t *testing.T) {
 	}
 	if a := mark(); strconv.FormatInt(a.Seq, 10) != sent[0].ID || a.Everyone {
 		t.Errorf("named by an agent: %+v, want #%s", a, sent[0].ID)
-	}
-}
-
-// The login a message names is pushed it (kind "at"); its own words push it nothing.
-func TestChannelAtPush(t *testing.T) {
-	t.Parallel()
-	p := newPushRig(t)
-	ua, _ := ecdh.P256().GenerateKey(rand.Reader)
-	auth := make([]byte, 16)
-	rand.Read(auth)
-	got := make(chan api.PushMessage, 10)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		var m api.PushMessage
-		if plain, err := push.Decrypt(ua, auth, body); err == nil {
-			json.Unmarshal(plain, &m)
-		}
-		got <- m
-		w.WriteHeader(http.StatusCreated)
-	}))
-	defer srv.Close()
-	sub := api.PushSubscription{Endpoint: srv.URL}
-	sub.Keys.P256dh = base64.RawURLEncoding.EncodeToString(ua.PublicKey().Bytes())
-	sub.Keys.Auth = base64.RawURLEncoding.EncodeToString(auth)
-	if code := p.do("POST", "/v1/internal/web/push/subscriptions", sub, nil); code != 200 {
-		t.Fatalf("subscribe: %d", code)
-	}
-	p.do("PUT", "/v1/internal/web/push", api.PushSwitch{Enabled: true}, nil)
-	// The session's rule: nothing pushed. One named is pushed all the same.
-	created, _ := createAt(p.t, http.DefaultClient, p.base, api.NewSession{Agent: api.AgentClaude, Cwd: p.work, Text: "hi"})
-	p.do("PUT", "/v1/internal/web/push/rules", api.PushRule{Scope: api.PushScopeSession, Target: created, Mode: api.PushModeOff}, nil)
-	// The agent says the words back: its message names the host, the host's own does not.
-	sendAt(p.t, http.DefaultClient, p.base, created, api.Send{Text: "tell @Iridium"})
-	for {
-		select {
-		case m := <-got:
-			if m.Kind != "at" {
-				continue
-			}
-			if m.Session != created || !strings.Contains(m.Body, "ok: tell @Iridium") {
-				t.Errorf("push: %+v", m)
-			}
-			return
-		case <-time.After(10 * time.Second):
-			t.Fatal("no push")
-		}
 	}
 }
 

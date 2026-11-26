@@ -30,8 +30,6 @@ type Config struct {
 	StopGrace Duration `json:"stopGrace"`
 	// Modes are the approval mode a new session of each agent starts in; none: the agent's own.
 	Modes map[string]string `json:"modes,omitempty"`
-	// Push is Web Push's total switch, off by default.
-	Push bool `json:"push"`
 	// Pairing takes apps' requests to pair (a person still allows each); off by default.
 	Pairing bool `json:"pairing,omitempty"`
 	// QuotaHidden are the quota bars the page does not show, each "<agent>:<account>:<group>:<model>".
@@ -75,21 +73,17 @@ type Update struct {
 	// URL is where new versions are looked for: a GitHub repository ("github:owner/repo") or a
 	// manifest's URL (package update); "" is Iridium's own releases, "off" looks nowhere.
 	URL string `json:"url,omitempty"`
-	// Every is how often to look; "" or "0" is once a day.
-	Every Duration `json:"every,omitzero"`
-	// Manual turns automatic updates off (the settings' 自动更新): no looking on a timer, nothing
-	// downloaded ahead; 检查更新 still looks, downloads and installs.
-	Manual bool `json:"manual,omitempty"`
 }
 
 // legacy are fields an older file may still have that are no longer read, as dotted paths:
-// update.manual (2026-11-08: release builds always download ahead, builds from source never);
+// update.manual and update.every (kumo, 2026-11-26: updates only when asked, nothing on a timer);
+// push (kumo, 2026-11-26: Web Push is gone);
 // pairClosed (0.2: pairing opens for a while, docs/next/decisions.md) and chatDir (0.2: the
 // plugins' chat layer is gone); enterInTurn (2026-11-19: words sent while a turn runs always
 // join it); crashResume and quotaResume (2026-11-24: nothing is continued by itself). One is
 // dropped before decoding only once Config has no field by its name, so it is listed ahead of its
 // removal; any other unknown field is still an error.
-var legacy = []string{"pairClosed", "chatDir", "update.manual", "enterInTurn", "crashResume", "quotaResume"}
+var legacy = []string{"pairClosed", "chatDir", "update.manual", "update.every", "push", "enterInTurn", "crashResume", "quotaResume"}
 
 // Source is where to look for new versions, "" for nowhere.
 func (u Update) Source(fallback string) string {

@@ -230,10 +230,7 @@ func (e *envFlag) Set(v string) error { *e = append(*e, v); return nil }
 func newUpdater(cfg config.Config, h *hub.Hub) *update.Updater {
 	return update.New(update.Options{
 		Source:  cfg.Update.Source(update.DefaultSource),
-		Every:   cfg.Update.Every.D(),
 		Current: version.Version,
-		Auto:    version.Release(), // a build from source is not replaced unasked
-		Manual:  cfg.Update.Manual,
 		Publish: func(s api.UpdateState) { h.Set("update", s) },
 		Restart: func() error {
 			// After the reply that says so has gone out.

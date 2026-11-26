@@ -29,7 +29,6 @@ import (
 	"github.com/kumoSleeping/iridium/internal/machineid"
 	"github.com/kumoSleeping/iridium/internal/platform"
 	"github.com/kumoSleeping/iridium/internal/pricing"
-	"github.com/kumoSleeping/iridium/internal/push"
 	"github.com/kumoSleeping/iridium/internal/remote"
 	"github.com/kumoSleeping/iridium/internal/server"
 	"github.com/kumoSleeping/iridium/internal/session"
@@ -181,14 +180,6 @@ func serve(cfgPath string) int {
 	srv.Updater = newUpdater(cfg, h)
 	h.Set("update", srv.Updater.State())
 	srv.Prices = pricing.Open(state)
-	// Web Push's total switch is the config's: turning it writes the file (with the settings').
-	srv.Push, err = push.Open(push.Options{StateDir: state, Store: st, Manager: m, Enabled: cfg.Push, Mask: srv.MaskText, Sees: srv.LoginSees, Save: func(on bool) error {
-		return srv.SaveConfig(func(c *config.Config) { c.Push = on })
-	}})
-	if err != nil {
-		log.Print(err)
-		return 1
-	}
 	home, _ := os.UserHomeDir()
 	srv.Discover, srv.Folders = d, discover.DefaultFolders(home, state, filepath.Dir(*path))
 	if len(cfg.FolderRoots) > 0 {
@@ -203,7 +194,7 @@ func serve(cfgPath string) int {
 	dumpStacksOn(state)
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	go srv.Updater.Run(ctx)
+	go srv.Updater.Clean()
 	go srv.Prices.Run(ctx)
 	if err := srv.Serve(ctx, tcp, sock); err != nil {
 		log.Print(err)

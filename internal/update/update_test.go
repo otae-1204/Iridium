@@ -177,9 +177,9 @@ func TestKeepPrev(t *testing.T) {
 
 func platform() string { return runtime.GOOS + "-" + runtime.GOARCH }
 
-// A GitHub release: the archive found by its name, its sum in SHA256SUMS, downloaded ahead with
-// auto on, so Apply only swaps it in.
-func TestGitHubAuto(t *testing.T) {
+// A GitHub release: the archive found by its name, its sum in SHA256SUMS. Check downloads nothing
+// (kumo, 2026-11-26: nothing ahead); Apply downloads it, swaps it in, restarts.
+func TestGitHub(t *testing.T) {
 	dir := t.TempDir()
 	exe := filepath.Join(dir, "iridium")
 	os.WriteFile(exe, []byte("old"), 0o755)
@@ -207,26 +207,14 @@ func TestGitHubAuto(t *testing.T) {
 		t.Fatalf("repo %q", repo)
 	}
 	restarts := 0
-	// Automatic updates off: the check sees it, nothing is downloaded until they are on again.
-	u := New(Options{Source: "github:o/r", GitHubAPI: srv.URL, Current: "v1.2.0", Auto: true, Manual: true, Exe: exe, Restart: func() error { restarts++; return nil }, Logf: t.Logf})
+	u := New(Options{Source: "github:o/r", GitHubAPI: srv.URL, Current: "v1.2.0", Exe: exe, Restart: func() error { restarts++; return nil }, Logf: t.Logf})
 	ctx := context.Background()
 	st, err := u.Check(ctx)
-	if err != nil || !st.Available || !st.Manual || st.Latest != "v1.3.0" || st.Notes != "notes" || st.Size != int64(len(archive)) {
+	if err != nil || !st.Available || st.Latest != "v1.3.0" || st.Notes != "notes" || st.Size != int64(len(archive)) || st.Phase != "idle" {
 		t.Fatalf("check: %+v %v", st, err)
-	}
-	u.prep.Lock()
-	u.prep.Unlock()
-	if st := u.State(); st.Ready || st.Phase != "idle" {
-		t.Fatalf("downloaded with automatic updates off: %+v", st)
 	}
 	if left, _ := filepath.Glob(filepath.Join(dir, ".iridium-update-*")); len(left) != 0 {
 		t.Fatalf("staged %v", left)
-	}
-	u.SetManual(false)
-	u.prep.Lock() // the download ahead is done
-	u.prep.Unlock()
-	if st := u.State(); !st.Ready || st.Phase != "idle" {
-		t.Fatalf("not ready: %+v", st)
 	}
 	if st, err := u.Apply(ctx, false); err != nil || st.Phase != "restarting" || restarts != 1 {
 		t.Fatalf("apply: %+v %v", st, err)

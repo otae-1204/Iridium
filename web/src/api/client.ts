@@ -23,15 +23,10 @@ import type {
   NewInvite,
   NewSession,
   NewUpload,
-  PushEvents,
-  PushRule,
-  PushState,
   Role,
   RolePatch,
   NewRole,
   HostPersona,
-  PushSubscription,
-  PushSwitch,
   SendReply,
   SessionPatch,
   SessionState,
@@ -461,14 +456,6 @@ export const api = {
   ultracode: (id: string, on: boolean) => writeAgain<{ ok: boolean }>("PUT", `${S(id)}/ultracode`, { ultracode: on } satisfies SetUltracode),
   rules: (id: string) => get<AllowRule[]>(`${S(id)}/rules`),
   clearRules: (id: string) => write<{ ok: boolean }>("DELETE", `${S(id)}/rules`),
-
-  // --- push ---
-  push: () => get<PushState>("/v1/internal/web/push"),
-  pushSwitch: (enabled: boolean) => writeAgain<{ ok: boolean }>("PUT", "/v1/internal/web/push", { enabled } satisfies PushSwitch),
-  pushDefaults: (e: PushEvents) => writeAgain<PushState>("PUT", "/v1/internal/web/push/defaults", e),
-  pushRule: (r: PushRule) => writeAgain<PushState>("PUT", "/v1/internal/web/push/rules", r),
-  pushSubscribe: (sub: PushSubscription) => write<{ ok: boolean }>("POST", "/v1/internal/web/push/subscriptions", sub),
-  pushUnsubscribe: (endpoint: string) => write<{ ok: boolean }>("DELETE", "/v1/internal/web/push/subscriptions", { endpoint }),
 
   // --- settings, update ---
   settings: () => get<Settings>("/v1/internal/settings"),

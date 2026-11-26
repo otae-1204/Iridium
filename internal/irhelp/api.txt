@@ -196,20 +196,13 @@ GET internal/pair/{request} - -> {status, token?}  pairing outcome; token given 
 GET internal/exec - -> ws  an executor's connection; its app TOKEN only
 
 # settings (admin)
-GET internal/settings - -> Settings  idle reaping, resumes, default modes, push, language; host or web
-PUT internal/settings {idleReap?, quotaHidden?, modes?, push?, lang?, autoUpdate?} -> Settings  person only
+GET internal/settings - -> Settings  idle reaping, default modes, language; host or web
+PUT internal/settings {idleReap?, quotaHidden?, modes?, lang?} -> Settings  person only
 GET internal/public - -> {origin?, passkeys}  public address; host or web
 PUT internal/public {origin} -> {origin?, passkeys}  set the public origin ("" off); the host's own ir, person only
-GET internal/update - -> UpdateState  versions and update progress  view=current,latest,available,ready,phase,error
-POST internal/update/check - -> UpdateState  check for a release now; person only
+GET internal/update - -> UpdateState  versions and update progress  view=current,latest,available,phase,error
+POST internal/update/check - -> UpdateState  check for a release now (downloads nothing); person only
 POST internal/update {force?} -> UpdateState  install the update and restart; person only
-GET internal/web/push - -> PushState  web push switch, key, defaults, rules; person only
-PUT internal/web/push {enabled} -> {ok}  on or off; person only
-PUT internal/web/push/defaults {needsYou, error, turnEnd} -> PushState  events pushed by default; person only
-PUT internal/web/push/rules {scope, target, mode, events?} -> PushState  group, folder, session rule; person only
-POST internal/web/push/subscriptions {endpoint, keys.p256dh, keys.auth} -> {ok}  add a browser; person only
-DELETE internal/web/push/subscriptions {endpoint} -> {ok}  remove a subscription; person only
-POST internal/web/push/test - -> {sent}  push a test to your own subscriptions; person only
 
 # wake
 PATCH internal/channels/{id}/members/{member} {nick?, on?} -> ChannelMembers  rename a member (agent:<session>; its nick is the same in every channel), set what wakes an agent (on: the whole list); any member, any agent's, and the channel says so; refused (422 bad_on): a loop of agents waking each other by their last words alone (an agent calls another with @); warn: a ring through a command  [more]

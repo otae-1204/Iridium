@@ -2211,83 +2211,6 @@ export interface PublicImage {
 }
 
 //////////
-// source: push.go
-
-/**
- * PushState is the Web Push settings: the total switch (off by default), the VAPID public key a
- * page subscribes with, the events pushed where no rule says otherwise, and the rules.
- */
-export interface PushState {
-  enabled: boolean;
-  publicKey: string; // base64url, uncompressed P-256 point
-  defaults: PushEvents;
-  rules: PushRule[];
-}
-/**
- * PushEvents are the events pushed, all on by default. TurnEnd takes in a compaction you asked for
- * (/compact); the agent's own is not pushed.
- */
-export interface PushEvents {
-  needsYou: boolean;
-  error: boolean;
-  turnEnd: boolean;
-}
-/**
- * PushScope is what a push rule is on.
- */
-export const PushScopeWorkspace = "workspace";
-export const PushScopeFolder = "folder";
-export const PushScopeSession = "session";
-export type PushScope = typeof PushScopeWorkspace | typeof PushScopeFolder | typeof PushScopeSession;
-/**
- * PushMode is a push rule's say: on or off; inherit (PUT, or ""): as above, the rule dropped.
- */
-export const PushModeOn = "on";
-export const PushModeOff = "off";
-export const PushModeInherit = "inherit";
-export type PushMode = typeof PushModeOn | typeof PushModeOff | typeof PushModeInherit;
-/**
- * PushRule is what a workspace, a folder or a session says over the defaults. A session's event
- * goes by the nearest rule of its session, its folder (its cwd), its workspace: off pushes nothing;
- * on pushes the events of the nearest of them with events of their own, else the defaults.
- */
-export interface PushRule {
-  scope: PushScope;
-  target: string; // workspace: its id ("0": sessions in none); folder: its absolute path; session: its id
-  mode: PushMode;
-  events?: PushEvents; // with on: its own; none: the ones from above
-}
-export interface PushSwitch {
-  enabled: boolean;
-}
-/**
- * PushSubscription is a browser's PushSubscription.toJSON().
- */
-export interface PushSubscription {
-  endpoint: string;
-  keys: {
-    p256dh: string;
-    auth: string;
-  };
-}
-/**
- * PushUnsubscribe drops the subscription at Endpoint.
- */
-export interface PushUnsubscribe {
-  endpoint: string;
-}
-/**
- * PushMessage is a push's payload, as the service worker gets it.
- */
-export interface PushMessage {
-  kind: string; // needs_you | error | turn_end | compact | at | test
-  session?: string;
-  title: string;
-  body: string;
-  tag?: string;
-}
-
-//////////
 // source: scripts.go
 
 /**
@@ -2478,7 +2401,7 @@ export interface SecretValues {
 
 /**
  * Settings is GET /v1/internal/settings: the config file's fields the settings page edits (plan "运行",
- * "推送", "网页"). PUT /v1/internal/settings takes a SettingsPatch and answers the whole again.
+ * "网页"). PUT /v1/internal/settings takes a SettingsPatch and answers the whole again.
  */
 export interface Settings {
   /**
@@ -2495,19 +2418,10 @@ export interface Settings {
    */
   modes: { [key: string]: string};
   /**
-   * Push: Web Push's total switch (off by default); GET /v1/internal/web/push has the rest.
-   */
-  push: boolean;
-  /**
    * Lang: the user's language, as a web page's settings last set it ("zh", "en"; "" not yet):
    * hosted agents are told it from their next start.
    */
   lang: string;
-  /**
-   * AutoUpdate: Iridium looks for a newer version by itself and downloads it ahead (on by
-   * default); off, only 检查更新 looks (config update.manual).
-   */
-  autoUpdate: boolean;
 }
 /**
  * SettingsPatch changes what it gives and nothing else. A mode "" goes back to the agent's own.
@@ -2516,9 +2430,7 @@ export interface SettingsPatch {
   idleReap?: string;
   quotaHidden?: string[];
   modes?: { [key: string]: string};
-  push?: boolean;
   lang?: string;
-  autoUpdate?: boolean;
 }
 
 //////////
@@ -2578,20 +2490,6 @@ export interface UpdateState {
   notes?: string;
   available: boolean;
   source: boolean; // an update source is configured
-  /**
-   * Auto: a newer version is downloaded as soon as it is seen (release builds; not a build from
-   * source).
-   */
-  auto: boolean;
-  /**
-   * Manual: automatic updates are off (config update.manual): nothing looked for on a timer or
-   * downloaded ahead; the page does not look when the settings open.
-   */
-  manual?: boolean;
-  /**
-   * Ready: Latest is downloaded and checked; 更新 only swaps it in and restarts.
-   */
-  ready?: boolean;
   /**
    * Size is Latest's download in bytes (0 unknown); Got how much of it came, while downloading.
    */

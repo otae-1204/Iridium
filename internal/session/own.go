@@ -13,7 +13,7 @@ import (
 // Who opened a session, and where the list has it (docs/exec.md "远端工作区", the user,
 // 2026-11-10): one a person opened is Own; one an agent started (ir new) hangs under its launcher
 // on the page; a group at another machine is listed only while it holds an Own session not
-// archived. What is not listed is not pushed either.
+// archived.
 
 // ownOf: a person opened s (api.Session.Own), o what lies over it. One with a launcher only once
 // taken out from under it (put by hand, Detach); one without, if Iridium opened it through a
@@ -230,26 +230,6 @@ func listed(list []api.Session, roots map[int64]string, id string) bool {
 		}
 		return false
 	}
-}
-
-// Listed says whether the page lists session id: what is not is not pushed, nor its asks sent to
-// a Bot. True when the list cannot be had.
-func (m *Manager) Listed(id string) bool {
-	l, err := m.List(m.ctx)
-	if err != nil {
-		return true
-	}
-	if h := m.byAgentID(id); h != nil {
-		id = h.id
-	}
-	var roots map[int64]string
-	if ws, err := m.o.Store.Workspaces(); err == nil {
-		roots = make(map[int64]string, len(ws))
-		for _, w := range ws {
-			roots[w.ID] = w.Path
-		}
-	}
-	return listed(l, roots, id)
 }
 
 // ArchiveTree archives session id (SetArchived) and, all the way down, the sessions hung under

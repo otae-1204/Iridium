@@ -25,11 +25,8 @@ func (s *Server) settingsRoutes(mux *http.ServeMux) {
 func (s *Server) settings() api.Settings {
 	t := s.m.Tuned()
 	s.cmu.Lock()
-	hidden, push, manual := slices.Clone(s.cfg.QuotaHidden), s.cfg.Push, s.cfg.Update.Manual
+	hidden := slices.Clone(s.cfg.QuotaHidden)
 	s.cmu.Unlock()
-	if s.Push != nil {
-		push = s.Push.Enabled()
-	}
 	if hidden == nil {
 		hidden = []string{}
 	}
@@ -37,7 +34,7 @@ func (s *Server) settings() api.Settings {
 	if modes == nil {
 		modes = map[string]string{}
 	}
-	return api.Settings{IdleReap: shortDuration(t.IdleReap), QuotaHidden: hidden, Modes: modes, Push: push, Lang: t.Lang, AutoUpdate: !manual}
+	return api.Settings{IdleReap: shortDuration(t.IdleReap), QuotaHidden: hidden, Modes: modes, Lang: t.Lang}
 }
 
 func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
@@ -93,19 +90,7 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		if p.Lang != nil {
 			c.Lang = *p.Lang
 		}
-		if p.Push != nil && s.Push == nil {
-			c.Push = *p.Push
-		}
-		if p.AutoUpdate != nil {
-			c.Update.Manual = !*p.AutoUpdate
-		}
 	})
-	if err == nil && p.AutoUpdate != nil && s.Updater != nil {
-		s.Updater.SetManual(!*p.AutoUpdate)
-	}
-	if err == nil && p.Push != nil && s.Push != nil {
-		err = s.Push.SetEnabled(*p.Push) // saves the file's push through SaveConfig
-	}
 	if err != nil {
 		s.error(w, err)
 		return

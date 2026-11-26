@@ -19,7 +19,7 @@ import { firstScreen, watchTurns } from "./chats";
 import { NewHere } from "./create";
 import { onCreateAt, type BrowseAt } from "./places";
 import { listFromDevice } from "./device/first";
-import { agentsQ, LOCAL_ME, pushQ, selfQ, useApps, useHome, useMe, useSettings, useUpdate, useWorkspaces } from "./data";
+import { agentsQ, LOCAL_ME, selfQ, useApps, useHome, useMe, useSettings, useUpdate, useWorkspaces } from "./data";
 import { FileWindow } from "./file-window";
 import { FileBrowserHandle, FileBrowserTrigger, loadFileBrowser } from "./filebrowser-trigger";
 import { t, useLang } from "./i18n";
@@ -105,7 +105,6 @@ const loadPanels = () => {
   for (const p of [SettingsPage, AppsPage, SecretsPage, RolesPage, CachePage, UsagePage, Jump]) void p.load().catch(() => {});
   void queryClient.prefetchQuery(agentsQ);
   void queryClient.prefetchQuery({ ...selfQ, staleTime: 30_000 });
-  void queryClient.prefetchQuery(pushQ);
   // The credentials' rows too: their page slid in empty and filled after.
   void queryClient.prefetchQuery({ queryKey: ["secrets"], queryFn: api.secrets, staleTime: 30_000 });
 };
@@ -474,7 +473,8 @@ export function App() {
             </div>
           ) : (
             <div key="settings" className={cn(slide, "h-full")} data-dir="back">
-              <SettingsPage key={setsRound} theme={theme} setTheme={setThemeKept} />
+              {/* shown: on a phone it stays drawn in the sheet, put away or not (its update looks on each opening). */}
+              <SettingsPage key={setsRound} theme={theme} setTheme={setThemeKept} shown={!phone || setsOut} />
             </div>
           )
         }

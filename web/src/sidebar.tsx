@@ -5,8 +5,8 @@
 // (the title its agent gave it, plan "会话标题") and, where the tree does not say it, its folder; out
 // of a turn, it ends with how long ago it was. 归档 folded at the bottom, its bin where a group's
 // folder is. A group's row: its name a size up, a faint "+" at its end for a new session there. A
-// row's menu (right click, long-press): pin, rename, stop, archive, 通知 while push is on (push.ts),
-// and at its foot the colour tags (colors.ts); a group's: rename, its path, 通知. The mouse resting
+// row's menu (right click, long-press): pin, rename, stop, archive, and at its foot the colour tags
+// (colors.ts); a group's: rename, its path. The mouse resting
 // on a row fetches its chat ahead.
 import { Menu } from "@base-ui/react/menu";
 import { Archive, ArchiveRestore, Bookmark, BookmarkMinus, Bot, Check, ChevronRight, Copy, Ellipsis, Ungroup, Folder, FolderOpen, ListCollapse, Moon, Pencil, Pin, PinOff, Plus, RefreshCw, Square, FolderPlus } from "lucide-react";
@@ -19,7 +19,6 @@ import { colorVar, COLORS, useFolderColors } from "./colors";
 import { ahead, behind } from "./chats";
 import { t, useLang } from "./i18n";
 import { useMoves } from "./motion";
-import { folderLevels, sessionLevels, usePushMenus, wsLevels, type PushLevel } from "./push";
 import { allFolders, folderSessions, foldersHolding, foldMore, groupHolding, machineOf, remotePath, type Folder as FolderNode, type Tree, type WsNode } from "./tree";
 import { createAt, onOpenPlace, type Place } from "./places";
 import { FileBrowserTrigger } from "./filebrowser-trigger";
@@ -363,7 +362,6 @@ export function Sidebar(p: Props) {
         <div key={f.key} role="group">
           <FolderRow
             f={f}
-            ws={w.id}
             depth={at}
             label={level === 0 && w.id === 0 ? <FolderLabel path={f.path} /> : f.name}
             hung={hungOf(folderSessions(f))}
@@ -739,11 +737,10 @@ function DropLine({ list }: { list: RefObject<HTMLDivElement | null> }) {
 }
 
 /** A group's row; its menu (right click, long-press): its sessions archived, as a folder's (the
- *  user, 2026-11-08: a group is a folder now), rename, its path copied, open or folded, 通知 while
- *  push is on. 未归类 itself (id 0): its sessions archived and its 通知. */
+ *  user, 2026-11-08: a group is a folder now), rename, its path copied, open or folded. 未归类
+ *  itself (id 0): its sessions archived. */
 function WsRow({ flip, id, name, root, sessions, hung, machine, remote, folders, open, onToggle, foldBack, newSub, end, wkey, place }: { flip: string; id: number; name: string; root: string; sessions: Session[]; hung: Session[]; machine?: Machine; remote?: boolean; folders?: boolean; open: boolean; onToggle: () => void; foldBack?: () => void; newSub?: () => void; end: ReactNode; wkey: string; place: (key: string, target: string, edge: Edge) => void }) {
   const machines = useMachines();
-  const push = usePushMenus();
   const me = useMe().data;
   const real = id !== 0 && manages(me);
   const [at, setAt] = useMenuAt();
@@ -787,7 +784,7 @@ function WsRow({ flip, id, name, root, sessions, hung, machine, remote, folders,
         } }]
       : []),
   ];
-  const menu = items.length > 0 || push || !!tags;
+  const menu = items.length > 0 || !!tags;
   // Dragged among all groups' rows, by its key (tree.ts WsNode.key).
   const dim = useDragged("ws", wkey);
   const dragging = movable
@@ -841,24 +838,9 @@ function WsRow({ flip, id, name, root, sessions, hung, machine, remote, folders,
         <Menu.Root open={at !== null} onOpenChange={(o) => !o && setAt(null)}>
           <MenuPortal>
             <Menu.Positioner anchor={anchor} side="bottom" align="start" sideOffset={4} collisionPadding={8} className="z-50">
-              {items.length || tags ? (
-                <MenuItems
-                  items={items}
-                  tags={tags}
-                  // No 删除 (the user, 2026-11-08): a group is the folder its sessions are in; it
-                  // goes once none is shown.
-                  foot={<PushFoot levels={wsLevels(id)} i={items.length} />}
-                />
-              ) : (
-                push && (
-                  <Menu.Popup finalFocus={false} className="g-unfold glass thick float min-w-52 rounded-lg p-1.5 text-ink outline-none">
-                    <div className="g-stagger flex flex-col">
-                      <div className="flex h-7 items-center px-2.5 text-xs font-medium text-ink-3">{t("push.menu")}</div>
-                      <push.m.PushItems st={push.st} levels={wsLevels(id)} i={1} />
-                    </div>
-                  </Menu.Popup>
-                )
-              )}
+              {/* No 删除 (the user, 2026-11-08): a group is the folder its sessions are in; it goes
+                  once none is shown. */}
+              <MenuItems items={items} tags={tags} />
             </Menu.Positioner>
           </MenuPortal>
         </Menu.Root>
@@ -1220,7 +1202,7 @@ export function sessionTags(s: Session): Tags {
 /** A folder's row in a workspace: its name, the "+" for a session in it; its menu (right click,
  *  long-press): a session here, its path copied, open or folded, its sessions archived, its colour
  *  tag. */
-function FolderRow({ f, ws, depth, label, hung, open, onToggle, foldBack, newSub, plus, lane, place, pin }: { f: FolderNode; ws: number; depth: number; label: ReactNode; hung: Session[]; open: boolean; onToggle: () => void; foldBack?: () => void; newSub?: () => void; plus: ReactNode; lane: string; place: (path: string, target: FolderNode, edge: Edge, lane: string) => void; pin: (path: string, on: boolean) => void }) {
+function FolderRow({ f, depth, label, hung, open, onToggle, foldBack, newSub, plus, lane, place, pin }: { f: FolderNode; depth: number; label: ReactNode; hung: Session[]; open: boolean; onToggle: () => void; foldBack?: () => void; newSub?: () => void; plus: ReactNode; lane: string; place: (path: string, target: FolderNode, edge: Edge, lane: string) => void; pin: (path: string, on: boolean) => void }) {
   const machines = useMachines();
   const me = useMe().data;
   // Dragged among the folders of its group (reorder.ts): the panels' and 本机's, as a group.
@@ -1285,7 +1267,7 @@ function FolderRow({ f, ws, depth, label, hung, open, onToggle, foldBack, newSub
       <Menu.Root open={at !== null} onOpenChange={(o) => !o && setAt(null)}>
         <MenuPortal>
           <Menu.Positioner anchor={anchor} side="bottom" align="start" sideOffset={4} collisionPadding={8} className="z-50">
-            <MenuItems items={items} tags={tags} foot={<PushFoot levels={folderLevels(f.path, ws)} i={items.length} />} />
+            <MenuItems items={items} tags={tags} />
           </Menu.Positioner>
         </MenuPortal>
       </Menu.Root>
@@ -1300,21 +1282,11 @@ function SessionMenu({ s, at, close, rename }: { s: Session; at: { x: number; y:
     <Menu.Root open={at !== null} onOpenChange={(o) => !o && close()}>
       <MenuPortal>
         <Menu.Positioner anchor={anchor} side="bottom" align="start" sideOffset={4} collisionPadding={8} className="z-50">
-          <MenuItems
-            items={items}
-            tags={sessionTags(s)}
-            foot={<PushFoot levels={sessionLevels(s)} i={items.length} />}
-          />
+          <MenuItems items={items} tags={sessionTags(s)} />
         </Menu.Positioner>
       </MenuPortal>
     </Menu.Root>
   );
-}
-
-/** 通知 at a menu's foot, while push is on (push.ts). */
-function PushFoot({ levels, i }: { levels: PushLevel[]; i: number }) {
-  const push = usePushMenus();
-  return push && <push.m.PushSubmenu st={push.st} levels={levels} i={i} />;
 }
 
 /** A colour tag and how to set it ("" takes it off). */

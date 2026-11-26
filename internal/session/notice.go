@@ -2,7 +2,7 @@ package session
 
 import "github.com/kumoSleeping/iridium/internal/api"
 
-// NoticeKind is what happened in a session, for those that pass it on: Web Push, plugins.
+// NoticeKind is what happened in a session, for those that pass it on: plugins, bots.
 type NoticeKind string
 
 const (

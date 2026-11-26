@@ -31,7 +31,6 @@ import (
 	"github.com/kumoSleeping/iridium/internal/hub"
 	"github.com/kumoSleeping/iridium/internal/joinscript"
 	"github.com/kumoSleeping/iridium/internal/pricing"
-	"github.com/kumoSleeping/iridium/internal/push"
 	"github.com/kumoSleeping/iridium/internal/remote"
 	"github.com/kumoSleeping/iridium/internal/satori"
 	"github.com/kumoSleeping/iridium/internal/session"
@@ -80,8 +79,6 @@ type Server struct {
 	pairs    *pairs     // apps asking to pair (pairing.go)
 	vault    *vault     // the credentials' masks and allowed uses (routes_secrets.go)
 
-	// Push, if set before Handler, is Web Push (routes_push.go).
-	Push *push.Service
 	// Discover and Folders, if set, serve the workspaces and the folder picker (routes_discover.go).
 	Discover *discover.Index
 	Folders  discover.Folders
@@ -267,7 +264,6 @@ func (s *Server) Handler(local bool) http.Handler {
 	s.publicRoutes(mux)  // publiclink.go
 	s.channelRoutes(mux) // channels.go
 	s.voiceRoutes(mux)
-	s.pushRoutes(mux)
 	mux.HandleFunc("GET /v1/internal/exec", s.execConnect)
 	s.pairRoutes(mux)
 	s.serverFaceRoutes(mux)
@@ -698,11 +694,11 @@ func (s *Server) done(w http.ResponseWriter, err error) {
 	reply(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// fault answers with err, knowing the errors of the session settings, the queue and push; the
+// fault answers with err, knowing the errors of the session settings and the queue; the
 // rest as s.error does.
 func (s *Server) fault(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, session.ErrBadRequest), errors.Is(err, push.ErrBadSubscription), errors.Is(err, push.ErrBadRule):
+	case errors.Is(err, session.ErrBadRequest):
 		fail(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, store.ErrNoInput):
 		refuse(w, http.StatusUnprocessableEntity, "no_such_input", err.Error())

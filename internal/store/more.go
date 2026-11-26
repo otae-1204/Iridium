@@ -85,50 +85,6 @@ func (s *Store) ClearRules(session string) error {
 	return err
 }
 
-// ---- push ----
-
-type PushSubscription struct {
-	ID       int64
-	Terminal string
-	Endpoint string
-	Keys     string // JSON: p256dh, auth
-}
-
-// AddPushSubscription keeps a browser's subscription; the same endpoint again replaces it.
-func (s *Store) AddPushSubscription(p PushSubscription) error {
-	_, err := s.db.Exec(`INSERT INTO push_subscriptions (terminal, endpoint, keys, created_at) VALUES (?, ?, ?, ?)
-		ON CONFLICT (endpoint) DO UPDATE SET terminal = excluded.terminal, keys = excluded.keys`, p.Terminal, p.Endpoint, p.Keys, now())
-	return err
-}
-
-func (s *Store) DeletePushSubscription(endpoint string) error {
-	_, err := s.db.Exec(`DELETE FROM push_subscriptions WHERE endpoint = ?`, endpoint)
-	return err
-}
-
-// DeleteTerminalPush drops every subscription of a terminal (revoked).
-func (s *Store) DeleteTerminalPush(terminal string) error {
-	_, err := s.db.Exec(`DELETE FROM push_subscriptions WHERE terminal = ?`, terminal)
-	return err
-}
-
-func (s *Store) PushSubscriptions() ([]PushSubscription, error) {
-	rows, err := s.db.Query(`SELECT id, terminal, endpoint, keys FROM push_subscriptions ORDER BY id`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []PushSubscription
-	for rows.Next() {
-		var p PushSubscription
-		if err := rows.Scan(&p.ID, &p.Terminal, &p.Endpoint, &p.Keys); err != nil {
-			return nil, err
-		}
-		out = append(out, p)
-	}
-	return out, rows.Err()
-}
-
 // ---- the outbox ----
 
 // OutboxLast is the plugin's newest event's sequence number, 0 if none.

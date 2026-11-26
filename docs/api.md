@@ -25,7 +25,7 @@ Iridium 自己的接口都在 `/v1/internal/` 下：Satori 规范的 internal �
 | `POST /v1/internal/sessions/{id}/manual` | `ManualAsk{reason, minutes?}` → `ManualState` | Claude 的 auto 模式拦下它要的一步时，请人临时切换至手动审批（见“临时切换至 manual”）；只有会话自己的 agent（`self`）能问，别人 403 |
 | `GET /v1/internal/sessions/{id}/manual?wait=` | — → `ManualState` | 最近一次的结果：`pending`、`approved`、`refused`、`expired`；`wait` 最多等 60 秒 |
 | `GET /v1/internal/agents` | → `AgentInfo[]` | 能开的 agent：审批模式（`modes`、`defaultMode`、`modeSwitch`：now / next turn / restart）、有没有上下文分项、有没有额度窗口、能不能开 ultracode（`ultracode`）、程序装没装（`missing`：PATH 上找不到；这时 `channel.create` 立刻 400，不等 agent 自更新那 30 秒，网页把它画淡，点了只提示未安装） |
-| `GET /v1/internal/settings` | → `Settings` | 设置的配置项：空闲回收（设置页不放，只改配置文件或经接口）、隐藏的额度条、各 agent 新会话的审批模式、推送总开关。管理权 |
+| `GET /v1/internal/settings` | → `Settings` | 设置的配置项：空闲回收（设置页不放，只改配置文件或经接口）、隐藏的额度条、各 agent 新会话的审批模式。管理权 |
 | `PUT /v1/internal/settings` | `SettingsPatch` → `Settings` | 只改给了的项，写进配置文件，马上生效。面板权 |
 
 ## 消息页
@@ -105,7 +105,7 @@ Iridium 自己的接口都在 `/v1/internal/` 下：Satori 规范的 internal �
   - 旧版的归档标记迁移成“没标记”。
 - 归组（2026-11-08：组就是文件夹，`Workspace` 是组，不能手建）：会话第一次显示时（第一次活动）做一次，记在库里，不给归档里的做：拉起者的组（组的文件夹包含它的目录时；子代理总跟父会话）→ 包含它目录的最外层的组 → 用它的目录新建一个组。家目录和 `/` 的组（另一台机器不在线时，按路径认它的家目录）只收正好在那里的会话。之后每次归组都把落在别的组文件夹里的组并进最外层那个（子目录先建了组、父目录后建的，比如执行端的会话一次全看到）：自动归进去的会话移过去，空了的组删掉，有手动放进去的会话的组留着。在未归类（`workspace` 为 0）且不是你手动放过去的也再归一次；只有没目录的、远端 Desktop 里不在任何工作区的（`loose`）留在 0。自动归进别的机器的组的（执行端重新配对换了 ID；以前跨机器跟着拉起者归的）按自己的目录重归，子代理除外，它跟父会话（2026-11-10）。`channel.create` 开的托管会话当场归组，不等记录出现：拉起者的组包含它的目录就进那个组，否则按自己的目录（跨机器不再跟拉起者，2026-11-10）。手动移过的（`channel.update` 的 `_data.workspace`）不再自动动。
 - 人开的和挂着的（2026-11-10，`exec.md`“远端工作区”）：`Session.own` 由服务端算，是“人开的”的唯一依据。有 `launcher` 的：手动放过（拖出来、`detach`）才算；没有的：托管、且经创建开的（`openers` 表有它：网页“+”、终端里的 `ir new`、应用开的、`/clear`）。子代理、接管的（发消息接过来的）、发现的都不算。有 `launcher`、不是子代理、不是 `own` 的属于拉起者（2026-11-15 起：拉起即进频道，见 `docs/channels.md`“拉起”，`own` 不再用来分挂靠）。
-- 推送只给页面会列的会话：本机的、`own` 的、有 `launcher` 的（挂着的；拉起者不在、归档了、是子代理或没列出就当人开的）、所在组列出来的（组里有没归档的人开会话，或本机的会话），子代理随父会话。远端没人开过的组里的会话不推送。服务端和页面用同一套规则（`session.standOf` 与 `tree.ts` 的 `standing`，共用 `internal/session/testdata/standing.json`，2026-11-10）。
+- 页面会列的会话：本机的、`own` 的、有 `launcher` 的（挂着的；拉起者不在、归档了、是子代理或没列出就当人开的）、所在组列出来的（组里有没归档的人开会话，或本机的会话），子代理随父会话。远端没人开过的组里的会话不列。服务端和页面用同一套规则（`session.standOf` 与 `tree.ts` 的 `standing`，共用 `internal/session/testdata/standing.json`，2026-11-10）。
 - 状态：`hosted` 托管；`elsewhere` 在别处运行，只读（能看状态和消息页，发消息回 409）；其余是磁盘上空闲的。别处退出后，发消息就接成托管会话（`--resume`），前提是没有别的进程在用（Claude：`sessions/` 里没有活着的同 ID 进程；dsh：`session.lock` 能拿到 flock；Codex：写锁）。现在只能接 Claude 的。
 - 列表变了（新会话、记录长了、进程起停、改了覆盖层）攒 200ms 发一次 `list` 整份，变了的会话另发 `session:<id>`。
 
@@ -223,12 +223,12 @@ agent 用 `ir sh <机器>[:目录] [--cwd 目录] [--timeout 2m] -- 命令`（`P
   - `attached`：挂在会话页面上的元素（2026-11-11），每段 `{place, from, content}`：`content` 按语言（`""` 不分语言），`from` 是 `ir`（Claude 的 UltraCode）、`m:<机器>`（执行端的插件，如 OMD 的 Ultra）或 `a:<应用>`。`place` 现在网页只画 `effort`：第一个按钮是强度滑条右边的键，其余的在键按下时排在滑条下面一行。按钮按下：`POST /v1/internal/button {id: "att:<会话>:<from>:<按钮 id>"}`。见 `docs/exec.md`“挂元素”。
   - 面板里选了模型就收起；强度滑条和挂在 `effort` 的键（UltraCode 等）在面板底下，调了不收。
 - 本会话一直允许：`answer` 带 `always: true`（或卡片选 `always`）。记下工具和 `Ask.pattern`（Claude 自己建议的规则，例如 `ls *`；没有时 shell 命令取第一个词加 ` *`，别的工具不带模式＝这个工具全部）。之后这个会话里匹配的审批自动允许，不通知、不出卡片。
-- 临时切换至 manual（kumo，2026-11-25）：Claude 的 auto 模式分类器拦下的一步不经 Iridium，直接回给模型（结果开头是 `Permission for this action was denied by the Claude Code auto mode classifier`），在页面上就是一步失败的调用（红色），没有单独的卡。Claude 真要这一步时，自己用 `ir api POST internal/sessions/self/manual reason=… --wait` 请人切换（系统提示里只给 Claude 这一句）：会话多一个 `kind: "manual"` 的 ask，像别的 ask 一样作为频道的一条消息、在输入框位置出卡片（同意 / 拒绝），并像 @ 一样叫那个频道里最近说话的人（没有就叫主机）。只有人能答，agent 答一律 403。`minutes` 1–10，默认 10（Claude 的 Bash 最长等 10 分钟）：既是等回答的时长，也是手动模式最长持续的时长；没人答、回合先结束或进程退出，就撤回，算拒绝（`expired`）。同意：运行中的进程切到 `manual`（不写进会话设置，进程重启就回到原模式），到这个回合结束或分钟数到了（先到为准）切回原模式，中间被问过的调用不提前结束它；期间手动换了模式就不切回。切换记在 hold 目录的 `release.json`（含结束时间）：守护进程重启接管仍在 manual 的同一进程时接着算，新进程就删掉。拒绝：什么都不变。`--wait` 等到结果，输出一行（同意退出码 0，否则 1）。回合结束的推送和 Bot 回复仍带“auto 拦了 N 步”。
+- 临时切换至 manual（kumo，2026-11-25）：Claude 的 auto 模式分类器拦下的一步不经 Iridium，直接回给模型（结果开头是 `Permission for this action was denied by the Claude Code auto mode classifier`），在页面上就是一步失败的调用（红色），没有单独的卡。Claude 真要这一步时，自己用 `ir api POST internal/sessions/self/manual reason=… --wait` 请人切换（系统提示里只给 Claude 这一句）：会话多一个 `kind: "manual"` 的 ask，像别的 ask 一样作为频道的一条消息、在输入框位置出卡片（同意 / 拒绝），并像 @ 一样叫那个频道里最近说话的人（没有就叫主机）。只有人能答，agent 答一律 403。`minutes` 1–10，默认 10（Claude 的 Bash 最长等 10 分钟）：既是等回答的时长，也是手动模式最长持续的时长；没人答、回合先结束或进程退出，就撤回，算拒绝（`expired`）。同意：运行中的进程切到 `manual`（不写进会话设置，进程重启就回到原模式），到这个回合结束或分钟数到了（先到为准）切回原模式，中间被问过的调用不提前结束它；期间手动换了模式就不切回。切换记在 hold 目录的 `release.json`（含结束时间）：守护进程重启接管仍在 manual 的同一进程时接着算，新进程就删掉。拒绝：什么都不变。`--wait` 等到结果，输出一行（同意退出码 0，否则 1）。回合结束的 Bot 回复仍带“auto 拦了 N 步”。
 - 匹配：`*` 是任意一段字；`前缀:*` 同 `前缀*`。shell 命令里有 `;`、`&&`、`||`、`|`、`` ` ``、`$(`、换行的，一律不按模式放行。
 
 ## 设置
 
-`GET /v1/internal/settings` 给 `Settings`：`idleReap`（`"1h"`、`"15m"`，`"0"` 是不回收）、`quotaHidden`（隐藏的额度条，`<agent>:<账号>:<窗口>:<模型>`）、`modes`（agent → 新会话的审批模式，没列的用 agent 自己的）、`push`（推送总开关，和 `PUT /v1/internal/push` 是同一个）、`lang`（用户的语言 `zh`/`en`，网页设置里选的；`""` 是还没告诉过，网页发现是空的就报自己的；托管 agent 下次启动时写进系统提示）、`autoUpdate`（自动更新，默认开，见“更新”）。
+`GET /v1/internal/settings` 给 `Settings`：`idleReap`（`"1h"`、`"15m"`，`"0"` 是不回收）、`quotaHidden`（隐藏的额度条，`<agent>:<账号>:<窗口>:<模型>`）、`modes`（agent → 新会话的审批模式，没列的用 agent 自己的）、`lang`（用户的语言 `zh`/`en`，网页设置里选的；`""` 是还没告诉过，网页发现是空的就报自己的；托管 agent 下次启动时写进系统提示）。
 
 - `PUT /v1/internal/settings` 带 `SettingsPatch`，只改给了的项；`modes` 里给 `""` 是去掉那个 agent 的。时长不对、agent 没有这个模式回 400。
 - 先读配置文件，只改这几项再写回（文件里别的照旧），同时改内存：空闲回收下次判断时就用新的，审批模式从下一次拉起起。
@@ -253,21 +253,7 @@ agent 用 `ir sh <机器>[:目录] [--cwd 目录] [--timeout 2m] -- 命令`（`P
 
 ## 推送
 
-Web Push，总开关在配置 `push`，默认关。VAPID 密钥存在状态目录 `vapid.json`（0600）。下面的请求只给网页的登录和主机：应用的 TOKEN 和 agent 的 `ir` 回 403。删一个登录时删掉它名下的订阅。
-
-| 请求 | 正文 → 回答 | 说明 |
-|---|---|---|
-| `GET /v1/internal/web/push` | → `PushState` | 总开关、VAPID 公钥（订阅时的 `applicationServerKey`）、默认事件 `defaults`、规则 `rules` |
-| `PUT /v1/internal/web/push` | `{enabled}` | 总开关，写进配置文件 |
-| `PUT /v1/internal/web/push/defaults` | `PushEvents` → `PushState` | 没有规则管的地方推哪些：`needsYou`、`error`、`turnEnd`（任务完成）默认都开。你发的 `/compact` 压缩成功算一次 `turnEnd`；agent 自己在回合中途的自动压缩不推（2026-11-08） |
-| `PUT /v1/internal/web/push/rules` | `PushRule` → `PushState` | 一个工作区、文件夹或会话的规则；`mode: inherit`（或空）删掉它 |
-| `POST /v1/internal/web/push/subscriptions` | `PushSubscription` | 浏览器 `subscription.toJSON()`，记在这个登录名下；只收 https |
-| `DELETE /v1/internal/web/push/subscriptions` | `{endpoint}` | |
-| `POST /v1/internal/web/push/test` | → `{sent}` | 给自己的订阅发一条测试，不看总开关 |
-
-`PushRule{scope, target, mode, events?}`：`scope` 是 `workspace`（`target` 是工作区 ID，`"0"` 是没归类的）、`folder`（会话目录的绝对路径，只管这一个目录）、`session`（会话 ID）；`mode` 是 `on` 或 `off`；`events` 只跟 `on`。一个会话的事件：会话、文件夹、工作区里最近的那条规则说开还是关（都没有就开）；开的话，事件取最近一条带 `events` 的 `on` 规则的，没有就用 `defaults`。
-
-推送的内容（service worker 收到的 JSON）：`PushMessage{kind, session, title, body, tag}`，`kind` 是 `needs_you`、`error`、`turn_end`、`at`（消息点到了这个登录，不看规则，总开关开着就推）、`test`；`tag` 是会话 ID。推送服务回 404/410 的订阅删掉。
+Web Push 已删（kumo，2026-11-26）：没有 `/v1/internal/web/push/*`，配置里旧的 `push` 读时忽略；库里的 `push_subscriptions`、`push_rules` 留着不读。
 
 ## 频道
 
@@ -408,7 +394,7 @@ agent 调 `ir invite`、`ir secret set` 时秘密不进它的对话：变成一�
 
 - 需要里的 `secret_set`（`Need.note`、`replace`；允许时 `NeedAnswer.value` 带值，服务端存好，谁存的记点“存”的面板；回答和 `ConfirmState` 不带值）、`secret_use`（`Need.secrets`、`command`；允许 / 本会话一直允许（`NeedAnswer.forSession`）/ 拒绝，记在内存里，会话的进程停了就忘；`owner: true`，只有带 Claude 的面板或本机 `ir` 能允许；有 `always` 的凭据不给“本会话一直允许”）。
 - 要不要确认：本机由人跑的 `ir run` 直接用；agent 的，会话由本机、带 Claude 的终端开的（或不经 Iridium 开的）直接用，别的终端开的要确认；`always` 的每次都确认。范围不对直接 403，不弹确认。
-- 对话记录出接口前（会话列表、会话状态、消息页、整段原文、携带状态、Satori 的消息和事件、推送；`ir api message.list`、`ir wait` 走的就是这些），已知的值（原样、URL 编码、base64）换成 `[secret:名]`；短于 6 个字符的不换（误伤太多）。
+- 对话记录出接口前（会话列表、会话状态、消息页、整段原文、携带状态、Satori 的消息和事件；`ir api message.list`、`ir wait` 走的就是这些），已知的值（原样、URL 编码、base64）换成 `[secret:名]`；短于 6 个字符的不换（误伤太多）。
 - `ir run` 自己起子进程（同目录、同环境，加上凭据），stdout/stderr 照转，按最长值的长度留尾巴再打码；退出码照子进程。
 
 ## 公网入口
@@ -434,11 +420,11 @@ agent 调 `ir invite`、`ir secret set` 时秘密不进它的对话：变成一�
 
 | 请求 | 正文 → 回答 | 说明 |
 |---|---|---|
-| `GET /v1/internal/update` | → `UpdateState` | 现在的版本、最新版本和说明、`size`（下载多大）、`available`、`auto`（查到新版就在后台下好：Release 版是，源码编译的不是）、`ready`（已下好）、`phase`（`idle`、`checking`、`downloading`（`got` 是下了多少）、`restarting`、`failed`）。携带状态 `update` 是同一份 |
-| `POST /v1/internal/update/check` | → `UpdateState` | 马上查一次；`auto` 时有新版就在后台下好 |
-| `POST /v1/internal/update` | `ApplyUpdate` → `UpdateState` | `ir update`、设置里的“更新”：用下好的，没有就现在下（核对 sha256、跑一次 `iridium version` 看版本对不对），原子替换二进制（换下的留在旁边，叫 `iridium.prev`）、重启服务。新版要升库时，先把库复制成 `iridium.db.v<旧版本号>.bak`。回滚：放回这两个文件。没有更新的（`force` 除外）回 409 |
+| `GET /v1/internal/update` | → `UpdateState` | 现在的版本、最新版本和说明、`size`（下载多大）、`available`、`phase`（`idle`、`checking`、`downloading`（`got` 是下了多少）、`restarting`、`failed`）。携带状态 `update` 是同一份 |
+| `POST /v1/internal/update/check` | → `UpdateState` | 马上查一次，不下载。设置页每次打开都调一次（有管理权、有更新源时） |
+| `POST /v1/internal/update` | `ApplyUpdate` → `UpdateState` | `ir update`、设置里的“更新”：现在下（核对 sha256、跑一次 `iridium version` 看版本对不对），原子替换二进制（换下的留在旁边，叫 `iridium.prev`）、重启服务。新版要升库时，先把库复制成 `iridium.db.v<旧版本号>.bak`。回滚：放回这两个文件。没有更新的（`force` 除外）回 409 |
 
-更新源是配置 `update.url`：不填是 `github:kumoSleeping/Iridium`（GitHub Releases 的最新版），`off` 不查；`update.every` 默认一天查一次。Release 版（版本号是干净的 `vX.Y.Z`）查到新版就下到二进制旁边的 `.iridium-update-*`，点“更新”只换文件、重启；源码编译的（`dev`、`vX.Y.Z-dev.N+g…`）不预先下载。设置里“自动更新”（`Settings.autoUpdate`，存为配置 `update.manual` 取反，默认开）关掉后不定时查、不预先下载，打开设置也不查（`UpdateState.manual`）；“检查更新”照常查、下载、替换（2026-11-10）。守护进程启动时清掉上次剩下的。
+更新源是配置 `update.url`：不填是 `github:kumoSleeping/Iridium`（GitHub Releases 的最新版），`off` 不查。更新全部手动（kumo，2026-11-26）：不定时查、不预先下载，“自动更新”开关去掉（配置里旧的 `update.manual`、`update.every` 读时忽略）；只在请求时查，“更新”时才下到二进制旁边的 `.iridium-update-*` 再替换。守护进程启动时清掉上次剩下的。
 
 GitHub 源：最新 Release 的 tag 是版本，正文（`<!-- iridium:assets -->` 之前，后面的大小表只给 Release 页看）是说明，资源 `iridium-<GOOS>-<GOARCH>.tar.gz`（里面的 `iridium`）或 `iridium-<GOOS>-<GOARCH>`；sha256 用资源自带的 `digest`，没有就看同一 Release 里的 `SHA256SUMS`。别的地址返回清单：
 

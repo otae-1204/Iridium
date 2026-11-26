@@ -1,7 +1,8 @@
-// Package update looks for a newer Iridium and installs it (plan "更新"): once a day it reads the
-// latest release from the configured source; with auto download on it fetches the new binary
-// ahead (checked against its sha256 and run once), so Apply only puts it in place of the running
-// one and restarts the service. Holders run in their own units, so hosted agents keep running.
+// Package update looks for a newer Iridium and installs it (plan "更新"), only when asked (kumo,
+// 2026-11-26: nothing on a timer, nothing downloaded ahead): Check reads the latest release from
+// the configured source (the settings page asks as it opens); Apply downloads the new binary,
+// checks it against its sha256, runs it once, puts it in place of the running one and restarts
+// the service. Holders run in their own units, so hosted agents keep running.
 //
 // A source is a GitHub repository ("github:owner/repo", or https://github.com/owner/repo), whose
 // latest release has an asset iridium-<GOOS>-<GOARCH>.tar.gz (the binary named iridium inside) or
@@ -88,14 +89,8 @@ func (m Manifest) Asset() (Asset, error) {
 }
 
 type Options struct {
-	Source  string        // a GitHub repository or a manifest's URL; "" looks for nothing
-	Every   time.Duration // 0 is a day
-	Current string        // this binary's version
-	// Auto: download a newer version as soon as it is seen; Apply then only swaps and restarts.
-	Auto bool
-	// Manual: automatic updates are off (config update.manual, the settings' 自动更新): no
-	// looking on a timer, nothing downloaded ahead; only Check and Apply when asked.
-	Manual bool
+	Source  string // a GitHub repository or a manifest's URL; "" looks for nothing
+	Current string // this binary's version
 	// Exe is the binary to replace; "" is this process's own (links resolved).
 	Exe string
 	// Restart runs once the new binary is in place: it restarts the service (or this process).
@@ -112,20 +107,14 @@ type Updater struct {
 	o Options
 
 	applying sync.Mutex // one Apply at a time
-	prep     sync.Mutex // one download at a time
 	mu       sync.Mutex
 	st       api.UpdateState
 	latest   *Manifest
-	auto     bool
-	manual   bool
-	staged   string // the path of the downloaded st.Latest, "" for none
+	staged   string // the path of a downloaded version not yet in place, "" for none
 	stagedV  string
 }
 
 func New(o Options) *Updater {
-	if o.Every <= 0 {
-		o.Every = 24 * time.Hour
-	}
 	if o.Client == nil {
 		o.Client = &http.Client{Timeout: 10 * time.Minute}
 	}
@@ -138,7 +127,7 @@ func New(o Options) *Updater {
 	if o.GitHubAPI == "" {
 		o.GitHubAPI = "https://api.github.com"
 	}
-	return &Updater{o: o, auto: o.Auto, manual: o.Manual, st: api.UpdateState{Current: o.Current, Source: o.Source != "", Auto: o.Auto, Manual: o.Manual, Phase: "idle"}}
+	return &Updater{o: o, st: api.UpdateState{Current: o.Current, Source: o.Source != "", Phase: "idle"}}
 }
 
 // State is the update state now.
@@ -157,59 +146,27 @@ func (u *Updater) set(f func(*api.UpdateState)) api.UpdateState {
 	return st
 }
 
-// SetManual turns automatic updates off (true) or on again: on, a newer version already seen
-// starts downloading.
-func (u *Updater) SetManual(manual bool) {
-	u.mu.Lock()
-	u.manual = manual
-	u.mu.Unlock()
-	u.set(func(s *api.UpdateState) { s.Manual = manual })
-	u.fetchAhead()
-}
-
-// Run drops what an earlier run left staged, checks a minute after it starts, then every Every,
-// until ctx ends; with automatic updates off it does not look.
-func (u *Updater) Run(ctx context.Context) {
-	if u.o.Source == "" {
+// Clean drops what an earlier run left staged and the binary an update replaced on Windows.
+func (u *Updater) Clean() {
+	exe, err := u.exe()
+	if err != nil {
 		return
 	}
-	if exe, err := u.exe(); err == nil {
-		old, _ := filepath.Glob(filepath.Join(filepath.Dir(exe), staging+"*"))
-		for _, p := range old {
-			os.Remove(p)
-		}
-		dropReplaced(exe)
+	old, _ := filepath.Glob(filepath.Join(filepath.Dir(exe), staging+"*"))
+	for _, p := range old {
+		os.Remove(p)
 	}
-	t := time.NewTimer(time.Minute)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		}
-		u.mu.Lock()
-		manual := u.manual
-		u.mu.Unlock()
-		if manual {
-			t.Reset(u.o.Every)
-			continue
-		}
-		if _, err := u.Check(ctx); err != nil {
-			u.o.Logf("update: %v", err)
-		}
-		t.Reset(u.o.Every)
-	}
+	dropReplaced(exe)
 }
 
-// Check reads the latest release and says whether it is newer than this binary; with auto
-// download on, a newer one starts downloading.
+// Check reads the latest release and says whether it is newer than this binary; it downloads
+// nothing.
 func (u *Updater) Check(ctx context.Context) (api.UpdateState, error) {
 	if u.o.Source == "" {
 		return u.State(), errors.New("no update source configured (update.url)")
 	}
 	u.set(func(s *api.UpdateState) {
-		if s.Phase != "downloading" {
+		if s.Phase != "downloading" && s.Phase != "restarting" {
 			s.Phase = "checking"
 		}
 		s.Error = ""
@@ -217,7 +174,7 @@ func (u *Updater) Check(ctx context.Context) (api.UpdateState, error) {
 	m, err := u.manifest(ctx)
 	if err != nil {
 		return u.set(func(s *api.UpdateState) {
-			if s.Phase != "downloading" {
+			if s.Phase == "checking" {
 				s.Phase = "failed"
 			}
 			s.Error = err.Error()
@@ -232,38 +189,12 @@ func (u *Updater) Check(ctx context.Context) (api.UpdateState, error) {
 	u.mu.Unlock()
 	st := u.set(func(s *api.UpdateState) {
 		s.Latest, s.Notes, s.Size, s.Available = m.Version, m.Notes, size, Newer(m.Version, u.o.Current)
-		s.Ready = s.Available && u.stagedV == m.Version && u.staged != ""
-		s.CheckedAt, s.Phase, s.Error = time.Now().UnixMilli(), u.idle(), ""
-	})
-	u.fetchAhead()
-	return st, nil
-}
-
-// idle is the phase with nothing asked: "downloading" while one runs ahead. With u.mu held.
-func (u *Updater) idle() string {
-	if u.st.Phase == "downloading" {
-		return "downloading"
-	}
-	return "idle"
-}
-
-// fetchAhead downloads the latest in the background, if it is newer, auto download is on,
-// automatic updates are not off and it is not already here or on its way.
-func (u *Updater) fetchAhead() {
-	u.mu.Lock()
-	m, want := u.latest, u.auto && !u.manual && u.latest != nil && Newer(u.latest.Version, u.o.Current) && u.stagedV != u.latest.Version
-	u.mu.Unlock()
-	if !want || !u.prep.TryLock() {
-		return
-	}
-	go func() {
-		defer u.prep.Unlock()
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-		defer cancel()
-		if _, err := u.stageLocked(ctx, *m); err != nil {
-			u.o.Logf("update: download %s: %v", m.Version, err)
+		s.CheckedAt, s.Error = time.Now().UnixMilli(), ""
+		if s.Phase == "checking" {
+			s.Phase = "idle"
 		}
-	}()
+	})
+	return st, nil
 }
 
 func (u *Updater) manifest(ctx context.Context) (Manifest, error) {
@@ -403,8 +334,8 @@ func (u *Updater) sums(ctx context.Context, a Asset) (map[string]string, error) 
 // ErrUpToDate: nothing newer to install.
 var ErrUpToDate = errors.New("already the latest version")
 
-// Apply installs the latest version: the one downloaded ahead, or download it now (check the
-// sha256, run it once), put it in place, restart. Unless force, only a newer one.
+// Apply installs the latest version: download it (check the sha256, run it once; one an earlier
+// Apply left staged is taken as it is), put it in place, restart. Unless force, only a newer one.
 func (u *Updater) Apply(ctx context.Context, force bool) (api.UpdateState, error) {
 	if !u.applying.TryLock() {
 		return u.State(), errors.New("an update is already being installed")
@@ -427,9 +358,7 @@ func (u *Updater) Apply(ctx context.Context, force bool) (api.UpdateState, error
 	if err != nil {
 		return fail(err)
 	}
-	u.prep.Lock() // waits for a download ahead
-	bin, err := u.stageLocked(ctx, m)
-	u.prep.Unlock()
+	bin, err := u.stage(ctx, m)
 	if err != nil {
 		return u.State(), err
 	}
@@ -448,7 +377,7 @@ func (u *Updater) Apply(ctx context.Context, force bool) (api.UpdateState, error
 	u.staged, u.stagedV = "", ""
 	u.mu.Unlock()
 	u.o.Logf("update: %s installed over %s at %s", m.Version, u.o.Current, exe)
-	st := u.set(func(s *api.UpdateState) { s.Phase, s.Available, s.Ready = "restarting", false, false })
+	st := u.set(func(s *api.UpdateState) { s.Phase, s.Available = "restarting", false })
 	if u.o.Restart != nil {
 		if err := u.o.Restart(); err != nil {
 			return fail(fmt.Errorf("installed %s, but the restart failed: %w", m.Version, err))
@@ -513,9 +442,9 @@ func (u *Updater) exe() (string, error) {
 	return exe, err
 }
 
-// stageLocked gives the path of m's binary next to the executable, checked and run once:
-// downloaded already, or now. With u.prep held.
-func (u *Updater) stageLocked(ctx context.Context, m Manifest) (string, error) {
+// stage gives the path of m's binary next to the executable, checked and run once: downloaded
+// already, or now. With u.applying held.
+func (u *Updater) stage(ctx context.Context, m Manifest) (string, error) {
 	u.mu.Lock()
 	if u.stagedV == m.Version && u.staged != "" {
 		p := u.staged
@@ -555,10 +484,7 @@ func (u *Updater) stageLocked(ctx context.Context, m Manifest) (string, error) {
 	u.mu.Lock()
 	u.staged, u.stagedV = tmp, m.Version
 	u.mu.Unlock()
-	u.set(func(s *api.UpdateState) {
-		s.Phase, s.Got = "idle", 0
-		s.Ready = s.Latest == m.Version
-	})
+	u.set(func(s *api.UpdateState) { s.Phase, s.Got = "idle", 0 })
 	return tmp, nil
 }
 

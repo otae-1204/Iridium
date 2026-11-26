@@ -207,7 +207,7 @@ func TestClearKeepsLauncher(t *testing.T) {
 	}
 }
 
-// What the page lists, so what is pushed: this machine's; an own session and the group at
+// What the page lists: this machine's; an own session and the group at
 // another machine it is in; one hung under its launcher; one whose launcher is gone or archived;
 // a subagent as its parent. Not one in a group at another machine no one opened.
 func TestListed(t *testing.T) {

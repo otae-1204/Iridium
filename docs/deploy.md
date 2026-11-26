@@ -23,7 +23,7 @@ tar xzf iridium-linux-amd64.tar.gz
 ```
 
 - ARM 机器换成 `iridium-linux-arm64.tar.gz`。`-prefix`、`-bin` 改位置。
-- 之后升级：设置里“更新”（默认自动在后台下好，设置里“自动更新”可关），或 `ir update`。
+- 之后升级：打开设置时查新版，有新版点“更新”（全部手动，2026-11-26），或 `ir update`。
 
 从源码装：
 

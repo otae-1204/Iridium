@@ -36,26 +36,31 @@ func TestPushRulesFromSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	rules, err := s.PushRules()
+	type rule struct {
+		scope, target string
+		off           bool
+		needs, turn   sql.NullBool
+	}
+	var rules []rule
+	rows, err := s.db.Query(`SELECT scope, target, off, needs_you, turn_end FROM push_rules ORDER BY scope, target`)
 	if err != nil {
 		t.Fatal(err)
 	}
+	for rows.Next() {
+		var r rule
+		if err := rows.Scan(&r.scope, &r.target, &r.off, &r.needs, &r.turn); err != nil {
+			t.Fatal(err)
+		}
+		rules = append(rules, r)
+	}
+	rows.Close()
 	if len(rules) != 2 {
 		t.Fatalf("rules: %+v", rules)
 	}
-	if r := rules[0]; r.Scope != PushWorkspace || r.Target != "0" || !r.Off || r.Events != nil {
+	if r := rules[0]; r.scope != "workspace" || r.target != "0" || !r.off || r.needs.Valid {
 		t.Errorf("nothing on: %+v", r)
 	}
-	if r := rules[1]; r.Target != "2" || r.Off || r.Events == nil || *r.Events != (PushEvents{NeedsYou: true, TurnEnd: true}) {
+	if r := rules[1]; r.target != "2" || r.off || !r.needs.Bool || !r.turn.Bool {
 		t.Errorf("its own: %+v", r)
-	}
-
-	// Set again replaces; deleted, it is gone.
-	must(t, s.SetPushRule(PushRule{Scope: PushWorkspace, Target: "0"}))
-	must(t, s.SetPushRule(PushRule{Scope: PushFolder, Target: "/x", Off: true}))
-	must(t, s.DeletePushRule(PushWorkspace, "2"))
-	rules, _ = s.PushRules()
-	if len(rules) != 2 || rules[0].Scope != PushFolder || rules[1].Off || rules[1].Events != nil {
-		t.Errorf("after: %+v", rules)
 	}
 }

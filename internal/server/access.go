@@ -210,8 +210,8 @@ func (s *Server) terminalsChanged() {
 	s.hub.Set("terminals", s.terminalsSeq.Add(1))
 }
 
-// revoked forgets a revoked app's or login's web sessions, browsers' push subscriptions and its
-// machine. An executor's connection ends now, not when it next connects.
+// revoked forgets a revoked app's or login's web sessions and its machine. An executor's
+// connection ends now, not when it next connects.
 func (s *Server) revoked(id string) {
 	if w := s.web(); w != nil {
 		w.Forget(id)
@@ -221,9 +221,6 @@ func (s *Server) revoked(id string) {
 	}
 	if s.st == nil {
 		return
-	}
-	if err := s.st.DeleteTerminalPush(id); err != nil {
-		s.logf("server: dropping %s's push subscriptions: %v", id, err)
 	}
 	if err := s.st.ForgetMachine(id); err != nil {
 		s.logf("server: forgetting %s's machine: %v", id, err)

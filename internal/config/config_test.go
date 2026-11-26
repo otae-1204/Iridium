@@ -41,14 +41,14 @@ func TestLoadSave(t *testing.T) {
 }
 
 // A file an older version wrote still loads: the fields 0.2 drops (pairClosed, chatDir) and those
-// gone already (update.manual, enterInTurn, crashResume, quotaResume) are skipped, and the rest stays strict.
+// gone already (update.manual, push, enterInTurn, crashResume, quotaResume) are skipped, and the rest stays strict.
 func TestLoadLegacy(t *testing.T) {
 	c, err := Load(filepath.Join("testdata", "v0.1.41.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if c.Listen != "127.0.0.1:7811" || c.Update.URL != "github:someone/iridium" ||
-		c.Public.Origin != "https://ir-test.example.com" || !c.Push || c.Lang != "zh" {
+		c.Public.Origin != "https://ir-test.example.com" || c.Lang != "zh" {
 		t.Fatalf("loaded: %+v", c)
 	}
 

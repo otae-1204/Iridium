@@ -60,7 +60,7 @@ func (s *Server) reloadSecrets() {
 	s.vault.text.Store(secrets.NewMasker(vals, secrets.MinShown, false))
 }
 
-// MaskText is s with the known values replaced by [secret:NAME] (pushes).
+// MaskText is s with the known values replaced by [secret:NAME].
 func (s *Server) MaskText(t string) string { return s.vault.text.Load().MaskString(t) }
 
 func (s *Server) jsonMask() *secrets.Masker { return s.vault.json.Load() }

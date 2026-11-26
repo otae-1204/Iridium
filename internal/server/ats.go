@@ -2,13 +2,11 @@ package server
 
 import (
 	"cmp"
-	"context"
 	"encoding/json"
 	"math"
 	"net/http"
 	"slices"
 	"strings"
-	"time"
 	"unicode"
 
 	"github.com/kumoSleeping/iridium/internal/api"
@@ -16,14 +14,12 @@ import (
 	"github.com/kumoSleeping/iridium/internal/deliver"
 	"github.com/kumoSleeping/iridium/internal/gate"
 	"github.com/kumoSleeping/iridium/internal/satori"
-	"github.com/kumoSleeping/iridium/internal/store"
 )
 
 // Who was named (docs/channels.md "有人 @ 我"): a message that names a login ("@name", Satori's
 // <at id/>) or all the members ("@全体成员", <at type="all"/>) is kept as that login's mark on
 // the channel (store "channel_ats": the first it has not read), till it reads that far; a quote
-// of its words is not (kumo, 2026-11-21). The pages carry their own marks (the state "ats"), and
-// the login is pushed the message whatever its rules say.
+// of its words is not (kumo, 2026-11-21). The pages carry their own marks (the state "ats").
 
 // person is a login as words may name it. member: what its place in a channel is kept under
 // (readerOf: "<app>/<login>", the host's "local/*"); id: its Satori user id, a message's author.
@@ -124,7 +120,7 @@ func namedIn(text string, names []string) map[string]bool {
 
 // names notes whom message seq of channel ch names, among the logins that see it: text, its
 // words; author, the member that said it ("": an agent), which its own words do not name. The
-// message it answers names no one (kumo, 2026-11-21: a quote is no @). Each is pushed it, and the pages are told. It gives
+// message it answers names no one (kumo, 2026-11-21: a quote is no @). The pages are told. It gives
 // the members noted, for unnames. Called as the message is said, ahead of what answers it: the
 // first that names a login is the one kept.
 func (s *Server) names(ch string, seq int64, text string, author string) []string {
@@ -181,7 +177,6 @@ func (s *Server) names(ch string, seq int64, text string, author string) []strin
 		return nil
 	}
 	s.atsChanged()
-	s.pushNamed(st, seq, told)
 	out := make([]string, len(told))
 	for i, p := range told {
 		out[i] = p.member
@@ -202,40 +197,6 @@ func (s *Server) unnames(ch string, seq int64, members []string) {
 	if any {
 		s.atsChanged()
 	}
-}
-
-// pushNamed pushes message seq of the channel to the logins it names, whatever their rules for
-// it say (a quiet channel too); not while Web Push is off.
-func (s *Server) pushNamed(st *api.SessionState, seq int64, told []person) {
-	if s.Push == nil || !s.Push.Enabled() {
-		return
-	}
-	m, ok := s.ch.Get(st.ID, seq)
-	if !ok {
-		return
-	}
-	who := m.Name
-	if id, ok := store.SessionOfMember(m.Author); ok {
-		who = cmp.Or(s.ch.Nick(id), string(s.harnessOf(id)))
-	}
-	body := s.MaskText(strings.TrimSpace(satori.AtWords(m.Text, s.ch.Nick)))
-	if who != "" {
-		body = who + ": " + body
-	}
-	if r := []rune(body); len(r) > 200 {
-		body = string(r[:199]) + "…"
-	}
-	msg := api.PushMessage{Kind: "at", Session: st.ID, Title: s.MaskText(s.channelName(st.ID)), Body: body, Tag: st.ID}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
-		for _, p := range told {
-			// A browser's subscription is kept under its login's id, the host's under the host's.
-			if p.app == gate.WebApp || p.app == gate.HostID {
-				s.Push.Send(ctx, p.id, msg)
-			}
-		}
-	}()
 }
 
 // readTo: reader has read channel ch up to message seq; what named it up to there is no mark
