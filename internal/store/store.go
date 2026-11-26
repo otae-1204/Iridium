@@ -408,6 +408,8 @@ var schema = []string{
 	);`,
 	// 49: the colour of each member's favorites' folder (favorites.go; kumo, 2026-11-26).
 	`CREATE TABLE IF NOT EXISTS favorite_colors (member TEXT PRIMARY KEY, color TEXT NOT NULL);`,
+	// 50: the name each member gave its favorites' folder ("" or none: 收藏; kumo, 2026-11-26).
+	`CREATE TABLE IF NOT EXISTS favorite_names (member TEXT PRIMARY KEY, name TEXT NOT NULL);`,
 }
 
 // steps run in Go after the migration of their version, in the same transaction.

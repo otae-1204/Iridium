@@ -86,6 +86,8 @@ export const en: Dict = {
   "menu.unpin": "Unpin",
   "menu.favorite": "Add to favorites",
   "menu.unfavorite": "Remove from favorites",
+  "menu.unfavoriteAll": "Remove all favorites",
+  "menu.unfavoriteAllSure": "Remove all?",
   "menu.quiet": "Mute",
   "menu.unquiet": "Unmute",
   "menu.pinned": "Pinned",

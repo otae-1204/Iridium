@@ -5,7 +5,7 @@
 // person to every device (internal/server/favorites.go); another's changes nothing of mine.
 import { useEffect, useSyncExternalStore } from "react";
 import { api, missing, queryClient } from "./api/client";
-import type { Color, Favorites } from "./api/types.gen";
+import type { Color, Favorites, FavoritesPatch } from "./api/types.gen";
 import { useQuery } from "./api/query";
 import { t } from "./i18n";
 import { useCarried } from "./store";
@@ -75,12 +75,24 @@ export function useFavorites(): string[] {
 /** My favorites' colour tag (the folder's icon tinted), mine alone. */
 export const useFavoritesColor = (): Color | undefined => useQuery(favQ, queryClient).data?.color || undefined;
 
-/** Tags my favorites with c ("" takes it off): drawn so at once, then patched; failed, as it was. */
-export function setFavoritesColor(c: Color | "") {
+/** The name I gave my favorites, none: the page's own (收藏). */
+export const useFavoritesName = (): string | undefined => useQuery(favQ, queryClient).data?.name || undefined;
+
+/** Tags my favorites with c ("" takes it off). */
+export const setFavoritesColor = (c: Color | "") => patchFavorites({ color: c as Color }, { color: c || undefined });
+
+/** Names my favorites ("" gives them the page's own name back). */
+export const setFavoritesName = (name: string) => patchFavorites({ name }, { name: name.trim() || undefined });
+
+/** Every favourite taken off at once (全部取消收藏): the block goes. */
+export const clearFavorites = () => put([]);
+
+/** My favorites' colour or name changed: drawn so at once (shown), then patched; failed, as it was. */
+function patchFavorites(p: FavoritesPatch, shown: Partial<Favorites>) {
   const was = queryClient.getQueryData<Favorites>(KEY) ?? EMPTY;
   void queryClient.cancelQueries({ queryKey: KEY });
-  queryClient.setQueryData<Favorites>(KEY, { ...was, color: c || undefined });
-  void api.patchFavorites({ color: c as Color }).then(
+  queryClient.setQueryData<Favorites>(KEY, { ...was, ...shown });
+  void api.patchFavorites(p).then(
     (f) => known(f),
     (e: unknown) => {
       queryClient.setQueryData(KEY, was);

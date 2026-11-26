@@ -86,6 +86,8 @@ export const zh = {
   "menu.unpin": "取消置顶",
   "menu.favorite": "收藏",
   "menu.unfavorite": "取消收藏",
+  "menu.unfavoriteAll": "全部取消收藏",
+  "menu.unfavoriteAllSure": "确认全部取消",
   "menu.quiet": "免打扰",
   "menu.unquiet": "取消免打扰",
   "menu.pinned": "已置顶",

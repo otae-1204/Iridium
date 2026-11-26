@@ -2,7 +2,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { api, queryClient } from "../src/api/client";
-import { favoriteAt, setFavorite, useFavorites } from "../src/favorites";
+import { clearFavorites, favoriteAt, setFavorite, setFavoritesName, useFavorites, useFavoritesName } from "../src/favorites";
 import { setCarried } from "../src/store";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -78,5 +78,35 @@ describe("favorites", () => {
     expect(seen.at(-1)).toBe(0);
     expect(seen.slice(seen.indexOf(0))).not.toContain(1);
     expect(queryClient.getQueryData(["favorites"])).toEqual({ channels: [] });
+  });
+
+  // kumo, 2026-11-26: 改名 and 全部取消收藏 in its row's menu.
+  test("named: drawn at once, kept on the device; all taken off: none left", async () => {
+    vi.spyOn(api, "favorites").mockResolvedValue({ channels: ["A", "B"] });
+    vi.spyOn(api, "patchFavorites").mockImplementation(async (p) => ({ channels: ["A", "B"], name: p.name || undefined }));
+    vi.spyOn(api, "putFavorites").mockImplementation(async (chs: string[]) => ({ channels: [...chs], name: "常用" }));
+    let ids: string[] = [];
+    let name: string | undefined;
+    function Probe() {
+      ids = useFavorites();
+      name = useFavoritesName();
+      return null;
+    }
+    const host = document.createElement("div");
+    document.body.append(host);
+    await act(async () => createRoot(host).render(<Probe />));
+    await act(async () => void (await new Promise((r) => setTimeout(r, 10))));
+    expect(ids).toEqual(["A", "B"]);
+    await act(async () => setFavoritesName("常用"));
+    await act(async () => void (await new Promise((r) => setTimeout(r, 10))));
+    expect(name).toBe("常用");
+    expect(JSON.parse(localStorage.getItem("favorites")!).name).toBe("常用");
+    await act(async () => setFavoritesName(""));
+    await act(async () => void (await new Promise((r) => setTimeout(r, 10))));
+    expect(name).toBeUndefined();
+    await act(async () => clearFavorites());
+    expect(ids).toEqual([]);
+    await act(async () => void (await new Promise((r) => setTimeout(r, 10))));
+    expect(ids).toEqual([]);
   });
 });

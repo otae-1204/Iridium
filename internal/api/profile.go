@@ -98,12 +98,18 @@ type Favorites struct {
 	Channels []string `json:"channels"`
 	// Color: the colour tag of the favorites' folder, the caller's own (PATCH); none: untagged.
 	Color Color `json:"color,omitempty"`
+	// Name: what the caller named its favorites (PATCH); none: the page's own (收藏).
+	Name string `json:"name,omitempty"`
 }
 
-// FavoritesPatch changes the caller's favorites' colour tag ("" takes it off).
+// FavoritesPatch changes the caller's favorites' colour tag or name ("" takes either off).
 type FavoritesPatch struct {
-	Color *Color `json:"color,omitempty"`
+	Color *Color  `json:"color,omitempty"`
+	Name  *string `json:"name,omitempty"`
 }
+
+// FavoritesNameMax is the longest name of the favorites, in characters.
+const FavoritesNameMax = 40
 
 // Remember is a memory to keep.
 type Remember struct {

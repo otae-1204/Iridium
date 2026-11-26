@@ -2075,13 +2075,22 @@ export interface Favorites {
    * Color: the colour tag of the favorites' folder, the caller's own (PATCH); none: untagged.
    */
   color?: Color;
+  /**
+   * Name: what the caller named its favorites (PATCH); none: the page's own (收藏).
+   */
+  name?: string;
 }
 /**
- * FavoritesPatch changes the caller's favorites' colour tag ("" takes it off).
+ * FavoritesPatch changes the caller's favorites' colour tag or name ("" takes either off).
  */
 export interface FavoritesPatch {
   color?: Color;
+  name?: string;
 }
+/**
+ * FavoritesNameMax is the longest name of the favorites, in characters.
+ */
+export const FavoritesNameMax = 40;
 /**
  * Remember is a memory to keep.
  */
