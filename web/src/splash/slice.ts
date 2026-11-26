@@ -133,10 +133,11 @@ export function slicer(E: Env) {
     }
   };
 
-  // Fruit many, what is not to be cut few (kumo, 2026-11-26): at most one of those a volley.
-  let bombOk = true;
+  // Fruit many, what is not to be cut few, from the first throw, among the fruit (kumo,
+  // 2026-11-26): at most one a volley, never its first.
+  let bombOk = false;
   const toss = () => {
-    const W = E.W(), top = E.top(), bot = E.bottom(), isBomb = bombOk && !!bomb && score > 3 && Math.random() < 0.08;
+    const W = E.W(), top = E.top(), bot = E.bottom(), isBomb = bombOk && !!bomb && Math.random() < 0.1;
     const from = marks.length && Math.random() < 0.22 ? marks : faces;
     if (isBomb) bombOk = false;
     const s = isBomb ? bomb! : from[(Math.random() * from.length) | 0];
@@ -228,8 +229,8 @@ export function slicer(E: Env) {
         // come a good deal thicker, and what is not to be cut a little oftener.
         // Twice as many again (kumo, 2026-11-26: a great deal more fruit), and sooner after each other.
         const n = 2 + (Math.random() < 0.7 ? 1 : 0) + (Math.random() < 0.4 ? 1 : 0) + (score > 6 && Math.random() < 0.6 ? 1 : 0) + (score > 14 && Math.random() < 0.6 ? 1 : 0) + (score > 26 && Math.random() < 0.6 ? 2 : 0);
-        bombOk = true;
-        for (let j = 0; j < n; j++) toss();
+        bombOk = false;
+        for (let j = 0; j < n; j++) toss(), (bombOk ||= j === 0);
         next = T + Math.max(300, 950 - score * 20) * (0.8 + Math.random() * 0.4);
       }
       for (let i = things.length - 1; i >= 0; i--) {

@@ -2,7 +2,8 @@
 // up, cut through; Iridium's mark not to be cut), over the whole pane, the page under it left as
 // it is (a chat goes on being written). Opened: the pane's bar and composer go (styles.css,
 // html[data-gaming]), a veil of the paper comes over the page, the code comes up over it and the
-// game is on at once, no zigzag drawn first. Over (its count gone), Esc or its ×: all of it goes
+// game is on at once, no zigzag drawn first. Over: its count and nothing more (no band going round
+// after), a press anywhere back to the chat. Its count gone, Esc or its ×: all of it goes
 // the way it came, and nothing of it is left running (its frames, its listeners, its canvases).
 //
 // Not web/attic/splash-game (a cat-eared boss): that is old code, put away, not to be used.
@@ -54,7 +55,9 @@ export default function GameLayer() {
     const tone = new MutationObserver(() => requestAnimationFrame(() => e.recolor()));
     tone.observe(root, { attributes: true, attributeFilter: ["data-theme", "class", "style"] });
 
-    let on = false, gone = false, raf = 0, tries = 0;
+    // over: the game ended, its count shown: a press anywhere goes back to the chat (kumo,
+    // 2026-11-26), not waited out.
+    let on = false, gone = false, over = false, raf = 0, tries = 0;
     const timers: number[] = [];
     const leave = () => {
       if (gone) return;
@@ -68,7 +71,7 @@ export default function GameLayer() {
     // On at once: as soon as the letters are drawn (the engine says no till then).
     const go = () => {
       if (gone || on) return;
-      on = e.play(leave);
+      on = e.play(leave, () => (over = true));
       if (!on && tries++ < 180) raf = requestAnimationFrame(go);
     };
     raf = requestAnimationFrame(() => {
@@ -90,6 +93,7 @@ export default function GameLayer() {
     const press = (ev: PointerEvent) => {
       ev.stopPropagation();
       if ((ev.target as Element | null)?.closest?.("button")) return;
+      if (over) return leave();
       touching = ev.pointerType === "touch";
       e.tap(...at(ev.clientX, ev.clientY));
       e.hold(true);

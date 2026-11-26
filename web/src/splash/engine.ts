@@ -144,7 +144,7 @@ export const ahead = (f: Fig) => void (f.src && picture(f.src));
 // anew (kumo, 2026-11-25: it blinked).
 let kept: { at: number; cols: number; rows: number; text: string[][]; off: Float32Array<ArrayBuffer>; speed: Float32Array<ArrayBuffer>; cur: Field; key: string } | null = null;
 
-export type Splash = { leave(done: () => void): void; enter(): void; figure(f: Fig | null): void; place(x: number, side: number, y?: number): void; foot(y: number): void; window(middle: number, height: number): void; recolor(): void; power(f: number): void; resize(): void; near(x: number, y: number): void; tap(x: number, y: number): void; hold(on: boolean): void; stop(): void; edge(on: boolean): void;  cast(who: Cast[]): void; onPlay(h: (on: boolean) => void): void; play(done: () => void): boolean };
+export type Splash = { leave(done: () => void): void; enter(): void; figure(f: Fig | null): void; place(x: number, side: number, y?: number): void; foot(y: number): void; window(middle: number, height: number): void; recolor(): void; power(f: number): void; resize(): void; near(x: number, y: number): void; tap(x: number, y: number): void; hold(on: boolean): void; stop(): void; edge(on: boolean): void;  cast(who: Cast[]): void; onPlay(h: (on: boolean) => void): void; play(done: () => void, ended?: () => void): boolean };
 
 
 /** fine: smaller characters, more of them to a figure (the portrait layout, where the band is
@@ -542,6 +542,9 @@ export function splash(cv: HTMLCanvasElement, still: boolean, fine = false, apar
   let sp = new Uint32Array(0), spCells = new Int32Array(0), nSp = 0;
   // The page told as the game begins and is over: its bars go for it and come back (splash.tsx).
   let told: ((on: boolean) => void) | null = null, playing = false, done: (() => void) | null = null;
+  // ended: told as the count comes (the ⋯ menu's Game); played: begun by play(), its ring of the
+  // pane's middle not to come back after (kumo, 2026-11-26: over a chat, no band going round).
+  let ended: (() => void) | null = null, played = false;
   const tell = (on: boolean) => void (on !== playing && ((playing = on), told?.(on)));
   const sl = slicer({
     W: () => W,
@@ -630,7 +633,7 @@ export function splash(cv: HTMLCanvasElement, still: boolean, fine = false, apar
       return { w, h, px };
     },
     // The pane's bars come back as its count comes (kumo, 2026-11-26), not once that is gone.
-    ended: () => tell(false),
+    ended: () => (tell(false), ended?.()),
     over: () => (tell(false), done?.(), (done = null), kick()),
     dark: () => dark,
   });
@@ -919,7 +922,7 @@ export function splash(cv: HTMLCanvasElement, still: boolean, fine = false, apar
     }
     wasTurning = turning;
     // The ring there where Iridium's letters would be (no agent to draw), coming and going.
-    const ringOn = ringAsk && !leaving && !left && (!sl.on() || sl.going()) ? 1 : 0;
+    const ringOn = ringAsk && !played && !leaving && !left && (!sl.on() || sl.going()) ? 1 : 0;
     ringK += (ringOn - ringK) * (1 - Math.exp(-dt / (sl.on() ? 0.9 : 0.4)));
     if (Math.abs(ringOn - ringK) < 0.005) ringK = ringOn;
     draw();
@@ -1175,11 +1178,13 @@ export function splash(cv: HTMLCanvasElement, still: boolean, fine = false, apar
     cast: (who) => sl.cast(who),
     onPlay: (h) => void (told = h),
     // The game begun at once, no zigzag drawn first (the ⋯ menu's Game): false while the letters
-    // are not drawn yet. done: when it is over, its count gone.
-    play(then) {
+    // are not drawn yet. done: when it is over, its count gone; end: as it is over, its count come.
+    play(then, end) {
       if (sl.on()) return true;
       if (still || !W || !rainbow || leaving || left) return false;
       done = then;
+      ended = end ?? null;
+      played = true;
       sl.start();
       tell(true);
       kick();
@@ -1188,7 +1193,7 @@ export function splash(cv: HTMLCanvasElement, still: boolean, fine = false, apar
     stop() {
       sl.stop();
       tell(false);
-      done = null;
+      done = ended = null;
       if (!apart && cols && rows && !leaving && !left) kept = { at: performance.now(), cols, rows, text, off, speed, cur, key: drawnKey };
       dead = true;
       cancelAnimationFrame(raf);
