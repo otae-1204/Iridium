@@ -399,6 +399,13 @@ var schema = []string{
 		WHEN triggers IN ('', 'at', '[]') OR json_valid(triggers) = 0 THEN '[]'
 		ELSE json_array(json_object('message', json_object('from', json(triggers))))
 	END WHERE member LIKE 'agent:%';`,
+	// 48: each member's favorites (favorites.go; kumo, 2026-11-26): channels in its own order.
+	`CREATE TABLE IF NOT EXISTS favorites (
+		member  TEXT NOT NULL,
+		channel TEXT NOT NULL,
+		sort    INTEGER NOT NULL,
+		PRIMARY KEY (member, channel)
+	);`,
 }
 
 // steps run in Go after the migration of their version, in the same transaction.
