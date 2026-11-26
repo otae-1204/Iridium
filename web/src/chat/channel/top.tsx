@@ -189,7 +189,8 @@ function MemberList({ id, viewers, ask, script, inviteFirst, done }: { id: strin
   const agents = (members?.members ?? []).filter((m) => m.session);
   // What the channel's page lends: its composer's @, its way to a session's record.
   const lent = actsOf(id);
-  // The phone's +: at the first row's end, 邀请 its next page (kumo + Neon, 2026-11-26).
+  // The phone's +: at the first row's end, 邀请 its next page (kumo + Neon, 2026-11-26), with no
+  // 返回 at its head: as the computer's + opens it, its computers' row at the top (kumo, 2026-11-26).
   const pages = usePages();
   const inviteId = `invite:${id}`;
   const plus = !!pages && may;
@@ -214,7 +215,7 @@ function MemberList({ id, viewers, ask, script, inviteFirst, done }: { id: strin
     <>
       {plus && !first && head("")}
       {plus && pages && (
-        <PageOf pages={pages} id={inviteId} title={t("channel.invite")}>
+        <PageOf pages={pages} id={inviteId} title={t("channel.invite")} bare>
           <InviteBody id={id} done={done} />
         </PageOf>
       )}
