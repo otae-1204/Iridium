@@ -1,0 +1,58 @@
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+import { describe, expect, test, vi } from "vitest";
+import { api, queryClient } from "../src/api/client";
+import { favoriteAt, setFavorite, useFavorites } from "../src/favorites";
+import { setCarried } from "../src/store";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+describe("favorites", () => {
+  test("a favourite moved, or one from elsewhere put, at a row's edge", () => {
+    expect(favoriteAt(["a", "b", "c"], "c", "a", "top")).toEqual(["c", "a", "b"]);
+    expect(favoriteAt(["a", "b", "c"], "a", "c", "bottom")).toEqual(["b", "c", "a"]);
+    expect(favoriteAt(["a", "b"], "x", "b", "top")).toEqual(["a", "x", "b"]);
+    expect(favoriteAt(["a", "b"], "x", "gone", "top")).toEqual(["a", "b", "x"]);
+  });
+
+  // kumo, 2026-11-26: the block came, went and came again as the first was favoured (and the
+  // other way as the last was taken off): the put's answer handed over to a cache not yet fetched.
+  test("the first favoured and the last taken off: the list never steps back", async () => {
+    let server: string[] = [];
+    const tick = () => new Promise((r) => setTimeout(r, 0));
+    vi.spyOn(api, "favorites").mockImplementation(async () => {
+      await tick();
+      return { channels: [...server] };
+    });
+    // The server's answer comes late; the stream's count moves before it, as it does there.
+    vi.spyOn(api, "putFavorites").mockImplementation(async (chs: string[]) => {
+      server = [...chs];
+      setCarried("favorites", Date.now());
+      await new Promise((r) => setTimeout(r, 20));
+      return { channels: [...server] };
+    });
+    const seen: number[] = [];
+    function Probe() {
+      seen.push(useFavorites().length);
+      return null;
+    }
+    const host = document.createElement("div");
+    document.body.append(host);
+    setCarried("favorites", 1);
+    await act(async () => createRoot(host).render(<Probe />));
+    await act(async () => void (await new Promise((r) => setTimeout(r, 30))));
+    seen.length = 0;
+
+    await act(async () => setFavorite("A", true));
+    await act(async () => void (await new Promise((r) => setTimeout(r, 80))));
+    expect(seen.at(-1)).toBe(1);
+    expect(seen.slice(seen.indexOf(1))).not.toContain(0);
+
+    seen.length = 0;
+    await act(async () => setFavorite("A", false));
+    await act(async () => void (await new Promise((r) => setTimeout(r, 80))));
+    expect(seen.at(-1)).toBe(0);
+    expect(seen.slice(seen.indexOf(0))).not.toContain(1);
+    expect(queryClient.getQueryData(["favorites"])).toEqual([]);
+  });
+});
