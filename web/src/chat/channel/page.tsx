@@ -441,7 +441,7 @@ export function ChannelPage({ id, sheet = 0, bar, record }: { id: string; sheet?
       <div className="relative h-full" onDragOver={(e) => files(e) || session(e) || place(e)} onDrop={drop}>
         {/* Nothing said yet: the pane's splash is told so (splash/splash.tsx). */}
         <ChannelSplash id={id} show={!hold && !sent.length && (log.loaded ? !log.msgs.length : justMade(id))} last={agents.at(-1)} agents={agents.length} />
-        <Stick key={hold ? "hold" : "whole"} scroller={scroller} tail={grew} older={() => log.older()} draw={changed} place={entry.place} openAt={openAt} late={log.late} onFollow={setAtEnd} bottom={stackH} quiet={asking} style={{ paddingTop: padTop, paddingBottom: stackH + 20 }}>
+        <Stick key={hold ? "hold" : "whole"} scroller={scroller} tail={grew} older={() => log.older()} draw={changed} place={entry.place} keep={id} openAt={openAt} late={log.late} onFollow={setAtEnd} bottom={stackH} quiet={asking} style={{ paddingTop: padTop, paddingBottom: stackH + 20 }}>
           <div data-column className="mx-auto flex max-w-(--chat-w) flex-col gap-5 px-4 [--depart-gap:1.25rem] sm:px-6">
             {!hold &&
               groups.map((g) => (
