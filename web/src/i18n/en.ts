@@ -833,7 +833,7 @@ export const en: Dict = {
   "apps.save": "Save",
   "apps.reset": "Revert",
   "apps.saved": "Saved",
-  "term.panel": "Web",
+  "term.panel": "Ir-Web",
   "term.channel": "App",
   "term.local": "Iridium",
   "term.this": "current",
