@@ -77,8 +77,6 @@ export const zh = {
   "menu.newHere": "在这里开新会话",
   "menu.copyPath": "复制路径",
   "menu.fold": "收起",
-  "menu.moveUp": "上移",
-  "menu.moveDown": "下移",
   "menu.unfold": "展开",
   "menu.foldSessions": "折叠会话",
   "menu.archiveHere": "归档这里的 {n} 个会话",
