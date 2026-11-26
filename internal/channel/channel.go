@@ -276,8 +276,10 @@ type Event struct {
 	Removed  []string      `json:"removed,omitempty"`
 	Everyone bool          `json:"everyone,omitempty"`
 	Seq      int64         `json:"seq,omitempty"`
-	Reason   string        `json:"reason,omitempty"`
-	By       string        `json:"by,omitempty"`
+	// Count: for "stopped", how many turns in a row it came to (Reason "idle": of words alone).
+	Count  int    `json:"count,omitempty"`
+	Reason string `json:"reason,omitempty"`
+	By     string `json:"by,omitempty"`
 	// What: for "profile" (a card changed: Member's, or the channel's when there is none), the
 	// fields that did: "name", "avatar".
 	What []string `json:"what,omitempty"`

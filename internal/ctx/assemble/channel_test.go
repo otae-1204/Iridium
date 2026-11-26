@@ -30,8 +30,9 @@ Agents:
 Rules:
 - Reply directly: only what you write reaches the channel; your thinking and tool calls stay yours, and you do not see theirs.
 - Before tools: one short line of what you're about to do (work folds under it).
-- Mentions: ` + "`@Nick` calls an agent; `Nick` without `@` only names it. Between agents, `@` only when you need a reply; omit it to end (agents passing it on without a person stop after a few turns anyway). End your turn after `@`ing an agent: its answer comes here, and one that answers you calls you." + `
-- Keep it tight: don't restate visible context, IDs, paths or states. Nothing to add (thanks/ack)? Write nothing and run ` + "`ir api POST internal/sessions/self/interrupt`" + `.
+- Mentions: ` + "`@Nick` calls an agent; `Nick` without `@` only names it. Between agents, `@` only when you need an answer — drop `@` once done, don't bounce acks or nag while waiting, and end your turn after `@`ing someone: its answer comes here, and one that answers you calls you." + `
+- Keep it tight: don't restate visible context, IDs, paths or states.
+- Interrupt: nothing to add (thanks/ack)? Write nothing and run ` + "`ir api POST internal/sessions/self/interrupt`" + `. If another agent here is clearly looping, off track or about to do harm (never one doing valid work), stop it with ` + "`ir api POST internal/sessions/<nick>/interrupt`" + ` and say why in one line.
 
 Commands:
 - History: ` + "`ir api message.list channel_id=self [next=<n> limit=<n>]` (search: `_data.q=\"<words>\"`)" + `
@@ -68,7 +69,7 @@ claude: bash 7 (go 4, git 3), 1 failed · 2 files +123 −14 · read 2 · web 1 
 	}
 	// Nothing unseen: who is there, nothing else.
 	in, _ = ChannelTurn(Channel{You: "a", Agents: []ChannelAgent{{Nick: "a"}}}, 1, "hi", "")
-	if got := in.String(); got != "#1: hi\n\n<channel-context>\nChannel: this session's own, shared with people and other agents | You: a\nAgents:\n- a\n\nRules:\n- Reply directly: only what you write reaches the channel; your thinking and tool calls stay yours, and you do not see theirs.\n- Before tools: one short line of what you're about to do (work folds under it).\n- Mentions: `@Nick` calls an agent; `Nick` without `@` only names it. Between agents, `@` only when you need a reply; omit it to end (agents passing it on without a person stop after a few turns anyway). End your turn after `@`ing an agent: its answer comes here, and one that answers you calls you.\n- Keep it tight: don't restate visible context, IDs, paths or states.\n</channel-context>" {
+	if got := in.String(); got != "#1: hi\n\n<channel-context>\nChannel: this session's own, shared with people and other agents | You: a\nAgents:\n- a\n\nRules:\n- Reply directly: only what you write reaches the channel; your thinking and tool calls stay yours, and you do not see theirs.\n- Before tools: one short line of what you're about to do (work folds under it).\n- Mentions: `@Nick` calls an agent; `Nick` without `@` only names it. Between agents, `@` only when you need an answer — drop `@` once done, don't bounce acks or nag while waiting, and end your turn after `@`ing someone: its answer comes here, and one that answers you calls you.\n- Keep it tight: don't restate visible context, IDs, paths or states.\n</channel-context>" {
 		t.Errorf("bare: %q", got)
 	}
 }

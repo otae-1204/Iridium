@@ -50,6 +50,11 @@ func (s *Server) sessionArg(ctx context.Context, c caller, arg string) (string, 
 	}
 	switch len(hits) {
 	case 0:
+		// An agent naming another of a channel it is in by its nick (an interrupt; kumo,
+		// 2026-11-26: no id to look up first, in a hurry).
+		if id := s.peerByNick(c, arg); id != "" {
+			return id, nil
+		}
 		return arg, nil
 	case 1:
 		return hits[0], nil
@@ -81,4 +86,34 @@ func (s *Server) withSessionArg(r *http.Request) (*http.Request, error) {
 // Resolve: satori.Resolver, channel_id as sessionArg takes it.
 func (b satoriBackend) Resolve(ctx context.Context, c satori.Caller, id string) (string, error) {
 	return b.s.sessionArg(ctx, callerAs(c), id)
+}
+
+// peerByNick is the session of the agent called nick (an @ before it or not) in a channel the
+// caller's agent is in, its own or another; "" if none is.
+func (s *Server) peerByNick(c caller, nick string) string {
+	nick = strings.TrimPrefix(nick, "@")
+	if c.session == "" || nick == "" {
+		return ""
+	}
+	for _, ch := range append([]string{c.session}, s.ch.In(c.session)...) {
+		for _, a := range s.ch.Agents(ch) {
+			if a != c.session && s.ch.Nick(a) == nick {
+				return a
+			}
+		}
+	}
+	return ""
+}
+
+// peers: sessions a and b are agents of one channel.
+func (s *Server) peers(a, b string) bool {
+	if a == "" || b == "" || a == b {
+		return false
+	}
+	for _, ch := range append([]string{a}, s.ch.In(a)...) {
+		if s.ch.Speaks(ch, b) {
+			return true
+		}
+	}
+	return false
 }

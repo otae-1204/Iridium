@@ -143,7 +143,8 @@ func TestScripts(t *testing.T) {
 	l.waitSaid("web", ch, "iridium", "删除了命令「bad」")
 }
 
-// A script and an agent waking each other stop as two agents do: MaxHops in a row.
+// A script and an agent waking each other stop as two agents do: the agent's turns of words
+// alone counted, MaxIdle of them in a row (a script's own runs not).
 func TestScriptHops(t *testing.T) {
 	t.Parallel()
 	l := start(t)
@@ -152,5 +153,5 @@ func TestScriptHops(t *testing.T) {
 	l.want(200, "web", "POST", "/v1/internal/channels/"+ch+"/scripts", api.NewScript{Name: "again", Run: `echo "@claude again"`,
 		On: []api.Trigger{{Message: &api.MessageTrigger{From: []string{"agent:" + ch}}}}}, nil)
 	l.send("web", ch, api.Send{Text: "go"})
-	l.waitSaid("web", ch, "未转交", fmt.Sprint(deliver.MaxHops))
+	l.waitSaid("web", ch, "已暂停", fmt.Sprint(deliver.MaxIdle))
 }

@@ -85,6 +85,8 @@ type link struct {
 	origin string
 	epoch  int64
 	hop    int
+	// idle: how many of those in a row were turns of words alone (deliver.MaxIdle).
+	idle int
 }
 
 // run is a channel's run now, and where each of its agents' turns stands in it.
@@ -100,6 +102,46 @@ type chains struct {
 	mu    sync.Mutex
 	runs  map[string]*run
 	locks map[string]*sync.Mutex // a session is given one message at a time
+	// tools: how many tools each session's agent has called in its turn now (saw).
+	tools map[string]int
+}
+
+// saw counts the tools of each agent's turn: none called, what it passes on is words alone.
+func (c *chains) saw(n session.Notice) {
+	if n.Kind != session.NoticeTurnStart && n.Kind != session.NoticeTool {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.tools == nil {
+		c.tools = map[string]int{}
+	}
+	if n.Kind == session.NoticeTurnStart {
+		c.tools[n.Session] = 0
+	} else {
+		c.tools[n.Session]++
+	}
+}
+
+// reach is the link of what from passes on, from where its turn stands (l): an agent's or a
+// script's one more in the run; an agent's turn of words alone one more idle, one with a tool
+// called none.
+func (c *chains) reach(from deliver.From, l link) link {
+	if !passes(from) {
+		return l
+	}
+	l.hop++
+	if from.Session != "" {
+		c.mu.Lock()
+		worked := c.tools[from.Session] > 0
+		c.mu.Unlock()
+		if worked {
+			l.idle = 0
+		} else {
+			l.idle++
+		}
+	}
+	return l
 }
 
 func (c *chains) lock(session string) func() {
@@ -161,7 +203,10 @@ func (c *chains) pass(ch, session string, l link) {
 		return
 	}
 	cur := r.at[session]
-	r.at[session] = link{hop: max(cur.hop, l.hop)}
+	if l.hop >= cur.hop {
+		cur.hop, cur.idle = l.hop, l.idle
+	}
+	r.at[session] = link{hop: cur.hop, idle: cur.idle}
 }
 
 // called is a channel an agent was called in by a subscription: for message seq; spoke, it has
@@ -485,6 +530,7 @@ func (s *Server) channelRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /v1/internal/channels/{id}/avatar", s.avatarPut)
 	mux.HandleFunc("GET /v1/internal/channels/{id}/reads", s.readsGet)
 	mux.HandleFunc("POST /v1/internal/channels/{id}/read", s.readPost)
+	mux.HandleFunc("POST /v1/internal/channels/{id}/continue", s.goOn)
 	mux.HandleFunc("GET /v1/internal/ats", s.atsGet)
 	mux.HandleFunc("GET /v1/internal/agents/{agent}/choices", s.agentChoices)
 	mux.HandleFunc("POST /v1/internal/dm", s.dmPost)
@@ -841,7 +887,7 @@ func (s *Server) launch(c caller, by, id, first string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	from := session.From(gate.HostID, "@"+s.ch.Nick(by))
-	if _, err := s.deliverTo(ctx, ch, id, seq, first, "", from, nil, reach(deliver.From{Session: by}, s.chain.of(ch, by))); err != nil {
+	if _, err := s.deliverTo(ctx, ch, id, seq, first, "", from, nil, s.chain.reach(deliver.From{Session: by}, s.chain.of(ch, by))); err != nil {
 		s.logf("server: channel %s: %s's first words to %s: %v", ch, by, id, err)
 		return s.firstWords(c, by, id, first)
 	}
@@ -1933,16 +1979,19 @@ func (e *behindError) Error() string { return e.text }
 
 // wakes are the agents of ch a message with words text wakes (deliver.Route), said by from,
 // whose turn (an agent's, a script's) stands at l in the channel's run. A person's begins a run
-// and wakes whom the rules give it; past MaxHops in a row nobody is woken. limit: someone was to
-// be woken and nobody is, for the limit reached (0: none was).
+// and wakes whom the rules give it; past MaxHops in a row, or MaxIdle of words alone, nobody is
+// woken. limit: someone was to be woken and nobody is, for the limit reached (0: none was).
 func (s *Server) wakes(text string, from deliver.From, l link, list []deliver.Agent) (wake, named []string, texts map[string][]api.Trigger, limit int) {
 	// <at> written in the words calls as "@nick" does (Markdown and Satori's elements mixed).
 	text = satori.AtWords(text, s.ch.Nick)
 	d := deliver.Route(text, from, list)
-	if !passes(from) || len(d.Wake) == 0 || l.hop < deliver.MaxHops {
+	if !passes(from) || len(d.Wake) == 0 || (l.hop < deliver.MaxHops && l.idle < deliver.MaxIdle) {
 		return d.Wake, d.Named, d.Texts, 0
 	}
-	return nil, d.Named, nil, deliver.MaxHops
+	if l.hop >= deliver.MaxHops {
+		return nil, d.Named, nil, deliver.MaxHops
+	}
+	return nil, d.Named, nil, -deliver.MaxIdle
 }
 
 // passes: from is an agent or a script, which go on a run a person began (a person begins one).
@@ -1952,21 +2001,23 @@ func passes(from deliver.From) bool {
 
 // reach is the link of a message said by from (its turn at l) as it reaches an agent: one more
 // passed it on, unless a person said it.
-func reach(from deliver.From, l link) link {
-	if passes(from) {
-		l.hop++
-	}
-	return l
-}
-
-// errTooFar refuses an agent's ir: limit agents in a row passed the message on.
+// errTooFar refuses an agent's ir: limit agents in a row passed the message on (a negative
+// limit: that many with words alone).
 func errTooFar(limit int) error {
-	return fmt.Errorf("%w: agents have woken one another %d times in a row; a person goes on from here", session.ErrBadRequest, limit)
+	if limit < 0 {
+		return fmt.Errorf("%w: agents have woken one another %d times in a row with words alone; paused till a person goes on (继续)", session.ErrBadRequest, -limit)
+	}
+	return fmt.Errorf("%w: agents have woken one another %d times in a row; paused till a person goes on (继续)", session.ErrBadRequest, limit)
 }
 
-// stopped says in channel ch that message seq was not passed on: limit agents in a row had.
+// stopped says in channel ch that message seq was not passed on: limit agents in a row had (a
+// negative limit: that many with words alone). A person goes on with 继续 (goOn).
 func (s *Server) stopped(ch string, seq int64, limit int, origin string) {
-	s.sat.Note(ch, fmt.Sprintf("未转交 #%d：Agent 已连续互相叫起 %d 次", seq, limit), origin, &channel.Event{Type: "stopped", Seq: seq})
+	text, ev := fmt.Sprintf("已连续协作 %d 轮，已暂停 #%d", limit, seq), &channel.Event{Type: "stopped", Seq: seq, Count: limit}
+	if limit < 0 {
+		text, ev.Count, ev.Reason = fmt.Sprintf("已连续 %d 轮只有对话，已暂停 #%d", -limit, seq), -limit, "idle"
+	}
+	s.sat.Note(ch, text, origin, ev)
 }
 
 // written is what an agent wrote in its turn, said where it was called (answer), not sent by it
@@ -2073,7 +2124,7 @@ func (s *Server) sendChannelAs(ctx context.Context, c caller, from, ch string, r
 		who.Member = store.AgentMember(sender)
 	}
 	routed, namedNicks, texts, limit := s.wakes(req.Text, who, lk, list)
-	if limit > 0 && relay == nil {
+	if limit != 0 && relay == nil {
 		return api.SendReply{}, errTooFar(limit)
 	}
 	var wake []string
@@ -2153,7 +2204,7 @@ func (s *Server) sendChannelAs(ctx context.Context, c caller, from, ch string, r
 	var failed []string
 	sent := 0
 	for _, t := range wake {
-		queued, err := s.deliverTo(ctx, ch, t, seq, text+s.onText(texts[t]), req.ID, from, images, reach(who, lk))
+		queued, err := s.deliverTo(ctx, ch, t, seq, text+s.onText(texts[t]), req.ID, from, images, s.chain.reach(who, lk))
 		if err != nil {
 			s.logf("server: channel %s: message %d to %s: %v", ch, seq, t, err)
 			firstErr = cmp.Or(firstErr, err)
@@ -2178,7 +2229,7 @@ func (s *Server) sendChannelAs(ctx context.Context, c caller, from, ch string, r
 		}
 		s.seen(ch, sender, given)
 	}
-	if limit > 0 {
+	if limit != 0 {
 		s.stopped(ch, seq, limit, lk.origin)
 	}
 	// Some got it, some not: said in the channel, where everyone sees whom it did not reach.
@@ -2583,6 +2634,59 @@ func fileNames(text string, files []api.FileRef) string {
 	return strings.TrimSpace(out + "\n（附件：" + strings.Join(names, "、") + "）")
 }
 
+// goOns are the messages a person went on with (goOn), by channel and number: once each.
+type goOns struct {
+	mu   sync.Mutex
+	done map[string]bool
+}
+
+// goOn: a person goes on where agents passing a message on were paused (继续; kumo, 2026-11-26):
+// the run begins anew as their speaking begins it, and the message paused is passed on as it was
+// to be. Once for each message.
+func (s *Server) goOn(w http.ResponseWriter, r *http.Request) {
+	c := callerOf(r)
+	ch, _, err := s.seeingChannel(c, r.PathValue("id"))
+	if err != nil {
+		s.error(w, err)
+		return
+	}
+	if c.byAgent() {
+		forbid(w, errors.New("a person goes on, not an agent"))
+		return
+	}
+	if err := s.inChannel(c, ch); err != nil {
+		s.error(w, err)
+		return
+	}
+	var req api.Read
+	if !readJSON(w, r, &req) {
+		return
+	}
+	m, ok := s.ch.Get(ch, req.Seq)
+	sender, agent := store.SessionOfMember(m.Author)
+	if !ok || !agent || m.Kind != channel.KindSaid {
+		refuse(w, http.StatusUnprocessableEntity, "no_such_message", "seq: an agent's message of the channel")
+		return
+	}
+	key := fmt.Sprintf("%s %d", ch, m.Seq)
+	s.goneOn.mu.Lock()
+	again := s.goneOn.done[key]
+	if s.goneOn.done == nil {
+		s.goneOn.done = map[string]bool{}
+	}
+	s.goneOn.done[key] = true
+	s.goneOn.mu.Unlock()
+	if again {
+		refuse(w, http.StatusConflict, "conflict", "already gone on with")
+		return
+	}
+	s.chain.person(ch, c.ID())
+	name := s.satoriUser(c).Name
+	s.sat.Note(ch, fmt.Sprintf("%s 已继续 #%d", name, m.Seq), c.ID(), &channel.Event{Type: "resumed", Seq: m.Seq, By: name})
+	s.passOn(m, sender)
+	reply(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 // routeSaid: an agent said m in its channel. In a channel of several, the agents it names are
 // given it; after too many agents in a row, nobody is, and the channel says so.
 func (s *Server) routeSaid(m channel.Message) {
@@ -2598,6 +2702,12 @@ func (s *Server) routeSaid(m channel.Message) {
 	if m.D.Final {
 		go s.heard(m.Channel, m.Seq, m.Text, m.Author, s.ch.Nick(sender), s.chain.of(m.Channel, sender))
 	}
+	s.passOn(m, sender)
+}
+
+// passOn gives what agent sender said (m) to the agents it wakes in its channel of several; past
+// the limit, to nobody, and the channel says it is paused.
+func (s *Server) passOn(m channel.Message, sender string) {
 	list, by := s.agentsOf(m.Channel)
 	if len(list) < 2 {
 		return
@@ -2607,7 +2717,7 @@ func (s *Server) routeSaid(m channel.Message) {
 	// what it says on its way, only whom it names.
 	who := deliver.From{Member: m.Author, Session: sender, Quiet: !m.D.Final}
 	wake, _, texts, limit := s.wakes(m.Text, who, lk, list)
-	if limit > 0 {
+	if limit != 0 {
 		s.stopped(m.Channel, m.Seq, limit, lk.origin)
 		return
 	}
@@ -2618,7 +2728,7 @@ func (s *Server) routeSaid(m channel.Message) {
 	go func() {
 		for _, t := range wake {
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-			_, err := s.deliverTo(ctx, m.Channel, t, m.Seq, m.Text+s.onText(texts[t]), "", from, nil, reach(who, lk))
+			_, err := s.deliverTo(ctx, m.Channel, t, m.Seq, m.Text+s.onText(texts[t]), "", from, nil, s.chain.reach(who, lk))
 			cancel()
 			if err != nil {
 				s.logf("server: channel %s: message %d to %s: %v", m.Channel, m.Seq, t, err)

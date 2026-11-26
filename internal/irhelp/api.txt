@@ -40,6 +40,7 @@ PUT internal/face {avatar} -> {}  give it one: a PNG, JPEG or WebP image in base
 DELETE internal/face - -> {}  take it away; a manager only
 GET internal/channels/{id}/reads - -> ChannelReads  how far each member has read the channel: a person as they said, an agent as far as it was given; who read message n: those with seq >= n  view=readers.member,readers.name,readers.nick,readers.seq
 POST internal/channels/{id}/read {seq} -> ChannelReads  you have read the channel up to message seq (never back); person only
+POST internal/channels/{id}/continue {seq} -> {ok}  go on where agents passing message seq on were paused (已暂停): the count begins anew and it is passed on; once each; person only
 GET internal/ats - -> ChannelAts  per channel, the first message that names you (@name, @全体成员, a quote of your words) and you have not read: {seq, everyone}; person only
 POST internal/dm {user} -> {channel}  the channel of you and one person (a login's user id; "local" the host): the same two, the same one; no agent, the two its people
 DELETE internal/channels/{id}/members/{member} - -> ChannelMembers  take a member out; its session stays as it is; person only
@@ -63,7 +64,7 @@ POST internal/links {path} -> FileLink  a file's ir: link and the Markdown to pu
 PUT internal/secrets/{name} {note?, value?, scope?, workspaces?, always?} -> SecretInfo  set; an agent gets 202 {need}: --wait for the user to type it in
 GET internal/sessions/{id} - -> SessionState  live state; --wait: wait for the turn to end, print its reply  view=id,status,model,mode,error,asks,queue,end
   --wait: holds your turn until its turn ends, then prints its last reply; exit 2 when it waits for a person (asks: its questions; POST internal/button answers one). For a session doing a job apart from your channel. Not for an agent in your channel (one you invited or started there): its words are said in the channel and its answer to you calls you, so waiting only holds your turn and gets you words everyone has already seen.
-POST internal/sessions/{id}/interrupt - -> {ok}  end the current turn (Esc); what waits in the queue pauses, and goes ahead of the next message
+POST internal/sessions/{id}/interrupt - -> {ok}  end the current turn (Esc); what waits in the queue pauses, and goes ahead of the next message; an agent: its own (self), or another agent's of a channel it is in, by its nick (one going round or off track)
 POST internal/sessions/{id}/tasks/{task}/stop - -> {ok}  stop one background task alone (tasks[].stop: Claude's); the turn and the other tasks go on
 POST internal/sessions/{id}/stop - -> {ok}  stop the agent process; the next message restarts it
 POST internal/button {id, option?, choices?, words?, message?} -> {}  answer an ask: id its card (asks[].card.id); or press a button (<card>#<option>; one attached: att:<session>:<from>:<id>, SessionState.attached)
@@ -210,7 +211,7 @@ PATCH internal/channels/{id}/members/{member} {nick?, on?} -> ChannelMembers  re
   {"message":{"from":[…],"words":[…]}}: from "*" every person, "<app>/<login>", "<app>/*", "agent:<session>" (its turn's last words); none: anyone. words: any of them (case not minded); none: any words.
   {"command":"name"} a person's /name; {"cron":"m h dom mon dow"} the host's time; {"event":["join","leave","rename","wake","error","ask"]} a member came or went, an agent renamed, someone's wake rules changed, an agent's error, an agent asks.
   Each may have "text": what it is to do then, given with what woke it ("greet them"). [] @ only. A new session's own agent: its maker's words. E.g. on:='[{"message":{"from":["*"]}},{"event":["join"],"text":"greet them"}]'.
-  Take care: a message entry of no from wakes on every agent's last words too; two agents woken by each other's words go round till 4 in a row (warned as set). Read GET internal/channels/{id}/members first: set on whole.
+  Take care: a message entry of no from wakes on every agent's last words too; two agents woken by each other's words go round till paused (30 in a row, or 4 turns of words alone; warned as set). Read GET internal/channels/{id}/members first: set on whole.
 GET internal/channels/{id}/scripts - -> Script[]  the commands of the channel (scripts): name, run, on, enabled, who made and last changed it, its last run  view=name,on,enabled,run
 POST internal/channels/{id}/scripts {name, run, on, enabled?} -> Script  add a command: a command line run at the host in the channel's folder when its on (as above; text not used) fires; any member; warn: a ring  [more]
   Given the message as JSON on stdin and as IR_TEXT, IR_FROM, IR_ARGS, IR_TRIGGER. What it prints (exit 0) is said by Iridium; @nick in it wakes that agent; ir in it speaks as Iridium too. 60 s at most. To wake an agent on words or a time, give the agent an on, not a command that prints @nick.
