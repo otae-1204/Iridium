@@ -23,6 +23,7 @@ import (
 	"github.com/kumoSleeping/iridium/internal/join"
 	"github.com/kumoSleeping/iridium/internal/macapp"
 	"github.com/kumoSleeping/iridium/internal/remote/executor"
+	"github.com/kumoSleeping/iridium/internal/update"
 	"github.com/kumoSleeping/iridium/internal/version"
 )
 
@@ -42,15 +43,17 @@ type ui struct {
 	here localState  // this computer's own Iridium (local.go)
 	pub  publicState // its 公网访问 (public.go)
 
-	mu       sync.Mutex
-	ready    string                  // a downloaded update's version, waiting for a restart
-	waiting  bool                    // this computer's Iridium is waited for: shown once it runs
-	picker   *mygo.Window            // the small window of the Iridiums (picker.go)
-	wins     []*mygo.Window          // the windows on Iridiums, the one in front (win) among them
-	shows    map[string]string       // each window's (by name) Iridium, as its page says
-	names    map[*mygo.Window]string // each window's name (picker, ask, w1…): mygo's windows have none
-	nwin     int
-	quitting bool // the app quits: the picker closes then, not only hides
+	upd *selfUpdate // the app's own update (selfupdate.go)
+
+	mu        sync.Mutex
+	waiting   bool                    // this computer's Iridium is waited for: shown once it runs
+	picker    *mygo.Window            // the small window of the Iridiums (picker.go)
+	wins      []*mygo.Window          // the windows on Iridiums, the one in front (win) among them
+	shows     map[string]string       // each window's (by name) Iridium, as its page says
+	names     map[*mygo.Window]string // each window's name (picker, ask, w1…): mygo's windows have none
+	nwin      int
+	toldReady bool // the Iridiums' pages told an update is ready (updateChanged)
+	quitting  bool // the app quits: the picker closes then, not only hides
 }
 
 func gui(o Options) int {
@@ -65,6 +68,7 @@ func gui(o Options) int {
 	}
 	trayIcon, _ := assets.ReadFile("assets/tray.png")
 	u := &ui{icon: icon}
+	u.upd = newSelfUpdate(update.Options{}, version.Release(), u.updateChanged, u.restartApp, logf)
 	u.joins = &Joins{Logf: logf, View: true, Record: &Record{Kind: "window"}}
 	u.joins.Record.save(nil)
 	// What the runtime is asked for more of this computer comes here to be answered (askfile.go).
@@ -192,7 +196,7 @@ func gui(o Options) int {
 	if o.NoServer {
 		_ = SetServer(false)
 	}
-	go u.binaryUpdates()
+	go u.upd.run()
 	go u.probe()
 	if err := mygo.App.Run(); err != nil {
 		logf("%v", err)
@@ -429,14 +433,14 @@ func (u *ui) message(w *mygo.Window, msg, origin string, logf func(string, ...an
 		go u.pickRoot(w, to, server)
 	case "update":
 		if arg == "restart" {
-			u.restartApp()
+			u.upd.restart()
 			return
 		}
 		go func() {
-			u.checkBinary()
+			u.upd.check(true)
 			c, _ := loadConfig()
 			h := u.hello(c, server)
-			if h["update"] == "" {
+			if h["update"] == "" && h["updatePct"] == nil {
 				h["notice"] = "已是最新"
 			}
 			reply(w, h)
@@ -498,12 +502,20 @@ func (u *ui) local(w *mygo.Window, verb, arg string) {
 	case "hello":
 		c, _ := loadConfig()
 		reply(w, state(c))
+		// The list opened: a newer release looked for (not again for a while), told as it comes.
+		go u.upd.check(false)
 		// The Iridiums' faces, fetched afresh; the list drawn again if one changed.
 		go func() {
 			if c, changed := refreshFaces(c); changed {
 				reply(w, state(c))
 			}
 		}()
+	case "update":
+		if arg == "restart" {
+			u.upd.restart()
+		} else {
+			go u.upd.check(true)
+		}
 	case "open":
 		// The picker's row pressed: that Iridium's window (kumo, 2026-11-22).
 		u.switchTo(arg)
@@ -716,9 +728,9 @@ func (u *ui) pageState(c Config) map[string]any {
 		list = append(list, e)
 	}
 	cu, _ := user.Current()
-	return map[string]any{"os": runtime.GOOS, "servers": list, "current": c.current(), "theme": c.Theme, "hasLocal": c.local() != nil,
+	return u.upd.view().fields(map[string]any{"os": runtime.GOOS, "servers": list, "current": c.current(), "theme": c.Theme, "hasLocal": c.local() != nil,
 		"me": c.Me, "sysName": ownName(cu), "agents": agents, "server": c.serverOn(), "public": publicOn(), "publicState": u.pub.view(),
-		"publicAddress": publicAddress(), "hideLocal": c.HideLocal}
+		"publicAddress": publicAddress(), "hideLocal": c.HideLocal})
 }
 
 // hello is what an Iridium's page learns of the app: that it is in it, and the Iridiums in its
@@ -748,15 +760,12 @@ func (u *ui) hello(c Config, server string) map[string]any {
 		list = append(list, map[string]any{"url": s.URL, "host": hostOf(s.URL), "current": s.URL == server, "local": s.Local,
 			"joined": !s.Off && !s.Local, "status": status, "shell": !s.NoShell, "roots": roots, "agents": agents})
 	}
-	u.mu.Lock()
-	ready := u.ready
-	u.mu.Unlock()
 	title := ""
 	if s := c.server(server); s != nil {
 		title = s.Title
 	}
-	return map[string]any{"app": "ir-app", "version": version.Short(version.Version), "name": name, "servers": list, "update": ready, "hasLocal": c.local() != nil, "server": !c.NoServer,
-		"public": publicOn(), "publicState": u.pub.view(), "title": title, "os": runtime.GOOS}
+	return u.upd.view().fields(map[string]any{"app": "ir-app", "version": version.Short(version.Version), "name": name, "servers": list, "hasLocal": c.local() != nil, "server": !c.NoServer,
+		"public": publicOn(), "publicState": u.pub.view(), "title": title, "os": runtime.GOOS})
 }
 
 // terms are what a page may ask to change of this computer for its Iridium: narrowing is done at
@@ -1061,11 +1070,13 @@ func (u *ui) drawMenu(c Config) {
 			u.redraw()
 		}))
 	}
-	u.mu.Lock()
-	ready := u.ready
-	u.mu.Unlock()
-	if ready != "" {
-		m = append(m, &item{Label: "重启以更新到 " + version.Short(ready), Click: click(u.restartApp)})
+	switch v := u.upd.view(); v.Phase {
+	case "ready":
+		m = append(m, &item{Label: "重启以更新到 " + version.Short(v.Version), Click: click(u.upd.restart)})
+	case "downloading":
+		m = append(m, &item{Label: fmt.Sprintf("下载中 %d%%", v.Pct), Disabled: true})
+	case "failed":
+		m = append(m, &item{Label: "更新失败", Click: click(func() { go u.upd.check(true) })})
 	}
 	m = append(m, mygo.Separator(), &item{Label: "Iridium " + version.Short(version.Version), Disabled: true},
 		&item{Label: "退出", Click: click(mygo.App.Quit)})

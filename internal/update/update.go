@@ -159,6 +159,18 @@ func (u *Updater) Clean() {
 	dropReplaced(exe)
 }
 
+// DropStaged removes the downloads left staged beside exe that have not changed for older: those
+// of an updater no longer running (Clean drops them all; another updater on the same
+// binary, the desktop app's, only those this old, not one another's still on its way).
+func DropStaged(exe string, older time.Duration) {
+	old, _ := filepath.Glob(filepath.Join(filepath.Dir(exe), staging+"*"))
+	for _, p := range old {
+		if fi, err := os.Stat(p); err == nil && time.Since(fi.ModTime()) > older {
+			os.Remove(p)
+		}
+	}
+}
+
 // Check reads the latest release and says whether it is newer than this binary; it downloads
 // nothing.
 func (u *Updater) Check(ctx context.Context) (api.UpdateState, error) {
@@ -384,6 +396,30 @@ func (u *Updater) Apply(ctx context.Context, force bool) (api.UpdateState, error
 		}
 	}
 	return st, nil
+}
+
+// Prepare downloads the latest version, if newer, ahead of an Apply (checked and run once, not
+// put in place), saying which; "" none newer. Only the desktop app asks it (kumo, 2026-11-26:
+// the app downloads its own update in the background; a server's updater downloads nothing
+// unasked).
+func (u *Updater) Prepare(ctx context.Context) (string, error) {
+	if !u.applying.TryLock() {
+		return "", errors.New("an update is already being installed")
+	}
+	defer u.applying.Unlock()
+	if _, err := u.Check(ctx); err != nil {
+		return "", err
+	}
+	u.mu.Lock()
+	m := *u.latest
+	u.mu.Unlock()
+	if !Newer(m.Version, u.o.Current) {
+		return "", nil
+	}
+	if _, err := u.stage(ctx, m); err != nil {
+		return "", err
+	}
+	return m.Version, nil
 }
 
 // Prev is where Apply keeps the binary it replaced: beside it, named <exe>.prev (iridium.prev), a

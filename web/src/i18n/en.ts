@@ -954,6 +954,7 @@ export const en: Dict = {
   "app.allFoldersKey": "Make it all",
   "app.version": "Version {v}",
   "app.check": "Check for updates",
+  "app.update": "Update",
   "app.restartTo": "Restart to update to {v}",
   "app.shown": "in the window",
   "app.removeSure": "Remove?",

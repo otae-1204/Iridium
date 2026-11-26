@@ -8,6 +8,7 @@
 //  - one Iridium's 授权操作: 命令行, each agent, 文件夹.
 // A part is drawn once its state is there, never before.
 import {
+  CircleArrowUp,
   ChevronLeft,
   ChevronRight,
   CornerDownLeft,
@@ -31,7 +32,7 @@ import { Menu } from "@base-ui/react/menu";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { Agent } from "../api/types.gen";
 import { Crop } from "../profile";
-import { agentName, cn, CopyKey, FaceChangeOver, IconKey, IrMark, Logo, SureKey, Switch, usePointAnchor, MenuPortal } from "../ui";
+import { agentName, cn, CopyKey, FaceChangeOver, IconKey, IrMark, Logo, SureKey, Switch, Tip, usePointAnchor, MenuPortal } from "../ui";
 import { ask, clipboardKeys, followTheme, onAnswer, whenReady } from "./bridge";
 import { Fold, useFolding } from "./fold";
 
@@ -72,7 +73,34 @@ type State = {
   publicState?: Pub;
   publicAddress?: string;
   hideLocal?: boolean; // 此电脑 hidden here (the tray's 此电脑 › 隐藏)
+  update?: string; // the app's update ready, for a restart (selfupdate.go); "": none
+  updatePct?: number; // it downloading: how far
+  updateError?: string; // its download failed
 };
+/** The app's own update, left of the close key: nothing, 下载中 37%, 重启以更新到 v…, or 更新失败
+ *  (pressed: looked for again). */
+function UpdateKey({ st }: { st: State }) {
+  const key = "g-press flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-ink-2 hover:bg-fill hover:text-ink";
+  if (st.update)
+    return (
+      <button type="button" className={key} onClick={() => ask("ir:update:restart")}>
+        <CircleArrowUp size={13} aria-hidden />
+        重启以更新到 {st.update}
+      </button>
+    );
+  if (typeof st.updatePct === "number")
+    return <span className="px-2 text-xs font-medium text-ink-3 tabular-nums">下载中 {st.updatePct}%</span>;
+  if (st.updateError)
+    return (
+      <Tip label={st.updateError} side="bottom">
+        <button type="button" className={cn(key, "text-ink-3")} onClick={() => ask("ir:update")}>
+          更新失败
+        </button>
+      </Tip>
+    );
+  return null;
+}
+
 type Note = { text: string; error?: boolean; server?: string };
 type Part = "who" | "servers" | { server: string };
 
@@ -133,6 +161,7 @@ export function Login() {
       >
         <IrMark size={15} className="text-ink" />
         <span className="flex-1">Iridium</span>
+        {st && <UpdateKey st={st} />}
         {/* Close alone: it is never full screen (kumo, 2026-11-22: no minimise). */}
         <IconKey
           label="关闭"

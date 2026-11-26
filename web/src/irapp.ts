@@ -24,6 +24,8 @@ export type AppState = {
   name: string; // this computer's
   servers: AppServer[];
   update: string; // a new version downloaded, waiting for a restart; "": none
+  updatePct?: number; // the app's update downloading: how far
+  updateError?: string; // its download failed
   hasLocal?: boolean; // this computer's own Iridium is in the list
   server?: boolean; // this computer's own Iridium is on (ir server on|off)
   public?: boolean; // it is on the internet (公网访问)

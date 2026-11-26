@@ -29,7 +29,8 @@ type Joins struct {
 	// Terminal: asked at the terminal it runs in (no window), as ir-computer asks, when Ask is nil.
 	Terminal bool
 	// Update: each join follows its Iridium's release (join.Program.Update); off where this
-	// computer's own Iridium runs in the process, or the window's app updates itself.
+	// computer's own Iridium runs in the process, or the app's window updates the binary itself
+	// (selfupdate.go): only executors with no screen and no server follow.
 	Update bool
 	// Record, when set, is kept on disk with the joins' states (iridium status).
 	Record *Record

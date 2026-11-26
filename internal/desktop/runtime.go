@@ -34,8 +34,11 @@ func Runtime(ctx context.Context, o RuntimeOptions) int {
 		logf("runtime: %v", err)
 		return 1
 	}
+	// The joins follow their Iridiums' release only where no window of the app can be (a server
+	// with no screen, an executor alone): elsewhere the app updates the binary itself from GitHub
+	// (selfupdate.go, kumo, 2026-11-26), and this loop starts again on it.
 	c, _ := loadConfig()
-	j := &Joins{Logf: logf, Record: &Record{Kind: "runtime"}, Update: c.NoServer}
+	j := &Joins{Logf: logf, Record: &Record{Kind: "runtime"}, Update: c.NoServer && !CanShow()}
 	j.Ask = func(ctx context.Context, q string) bool {
 		return askWindow(ctx, "", q, []executor.Item{{Kind: "text", Value: q}})[0]
 	}
