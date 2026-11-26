@@ -308,6 +308,9 @@ func paired(blocks []api.Block) []api.Block {
 		if b.Kind == api.BlockKindResult {
 			if i, ok := calls[b.ID]; ok && out[i].Result == nil {
 				out[i].Result = &api.Result{At: b.At, Time: b.Time, Text: b.Text, Length: b.Length, Error: b.Error, Images: b.Images}
+				if SelfStopped(out[i]) {
+					out[i].Result.Error = false
+				}
 				continue
 			}
 		}

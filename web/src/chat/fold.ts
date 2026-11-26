@@ -14,6 +14,15 @@ export type Shown = (Block & { kind: "user" | "assistant" | "system" }) | { kind
  *  over (what an agent did before its words in a channel, a part of its turn given something more
  *  after it): a call there with no result is one whose result never came (the agent stopped in the
  *  middle of it, its limit out), and it is a step like any other, not a call running for hours. */
+/** An agent stopping its own turn (ir api POST internal/sessions/self/interrupt) is stopped in that
+ *  call, which its record has as an error: not a failure when its result says it was stopped
+ *  (kumo, 2026-11-26). The server's rule (internal/transcript/selfstop.go) for a result paired here. */
+const SELF_STOP = /\bir\s+api\s+(?:POST\s+)?\/?(?:v1\/)?internal\/sessions\/self\/interrupt\b/;
+const STOPPED = ["stopped while running", "The user doesn't want to proceed with this tool use", "[Request interrupted by user"];
+export function selfStopped(b: Block): boolean {
+  return b.kind === "tool" && !!b.result?.error && SELF_STOP.test(b.input ?? "") && STOPPED.some((w) => b.result!.text.includes(w));
+}
+
 export function folded(blocks: Block[], atWork = true): Shown[] {
   // A result whose call was on another page goes with it by id.
   const results = new Map(blocks.flatMap((b) => (b.kind === "result" && b.id ? [[b.id, b] as const] : [])));
@@ -21,7 +30,9 @@ export function folded(blocks: Block[], atWork = true): Shown[] {
     // An agent naming its session (ir rename) is the list's, not the chat's.
     if (b.kind === "result" || (b.kind === "tool" && renameOnly(b))) return [];
     const r = b.kind === "tool" && !b.result && b.id ? results.get(b.id) : undefined;
-    return r ? [{ ...b, result: { at: r.at, time: r.time, text: r.text ?? "", length: r.length, error: r.error, images: r.images } }] : [b];
+    if (!r) return [b];
+    const p: Block = { ...b, result: { at: r.at, time: r.time, text: r.text ?? "", length: r.length, error: r.error, images: r.images } };
+    return [selfStopped(p) ? { ...p, result: { ...p.result!, error: false } } : p];
   });
   let end = all.length;
   if (atWork) while (all[end - 1]?.kind === "tool" || all[end - 1]?.kind === "thinking") end--;

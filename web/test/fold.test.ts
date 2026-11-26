@@ -3,7 +3,7 @@ import { partialInput, tail } from "../src/chat/partial";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import type { Block } from "../src/api/types.gen";
 import { cmdOf, cmdOfCall, cpOfCall, irOfCall, newOfCall, renameOnly } from "../src/chat/cmd";
-import { argOf, diffOf, diffSum, diffText, folded, foldKey, foldLine, foldSaid, foldSpan, lineDiff, patchDiff, pictureName, runCmds, unifiedDiff, type Step } from "../src/chat/fold";
+import { argOf, diffOf, diffSum, diffText, folded, selfStopped, foldKey, foldLine, foldSaid, foldSpan, lineDiff, patchDiff, pictureName, runCmds, unifiedDiff, type Step } from "../src/chat/fold";
 import { setLang } from "../src/i18n";
 
 const call = (name: string, input: unknown, more: Partial<Omit<Block, "kind">> = {}): Step => ({ at: `${name}.${Math.random()}`, kind: "tool", name, input: typeof input === "string" ? input : JSON.stringify(input), result: { at: "r", text: "ok" }, ...more });
@@ -352,5 +352,22 @@ describe("unifiedDiff for Edit cards", () => {
       { kind: "del", line: "b" },
       { kind: "eq", line: "c" },
     ]);
+  });
+});
+
+describe("selfStopped", () => {
+  const stop = JSON.stringify({ command: "ir api POST internal/sessions/self/interrupt", description: "End turn" });
+  const said = "The user doesn't want to proceed with this tool use. The tool use was rejected. Correction to the text above: this call was stopped while running, not refused before it ran.";
+  const call = (input: string, text: string, error = true): Block => ({ at: "1.0", kind: "tool", id: "c", name: "Bash", input, result: { at: "2.0", text, error } });
+  test("an agent stopping itself: no failure, paired here too", () => {
+    expect(selfStopped(call(stop, said))).toBe(true);
+    const [s] = folded([{ at: "1.0", kind: "tool", id: "c", name: "Bash", input: stop }, { at: "2.0", kind: "result", id: "c", text: said, error: true }], false);
+    expect(s?.kind).toBe("fold");
+    expect(JSON.stringify(s)).not.toContain('"error":true');
+  });
+  test("its call answered with an error, or another call stopped: still a failure", () => {
+    expect(selfStopped(call(stop, "Error: Exit code 1\nir: 403 forbidden"))).toBe(false);
+    expect(selfStopped(call(JSON.stringify({ command: "sleep 100" }), said))).toBe(false);
+    expect(selfStopped(call(stop, said, false))).toBe(false);
   });
 });

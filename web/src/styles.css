@@ -456,25 +456,6 @@ body {
   background: var(--compact);
   animation: row-breathe 2s ease-in-out infinite;
 }
-/* The link's signal not measured yet (link.tsx): faint, breathing slowly. Only opacity moves;
-   still where motion is reduced. */
-.sig-wait {
-  animation: wk-breathe 2.8s ease-in-out infinite;
-}
-@keyframes wk-breathe {
-  0%,
-  100% {
-    opacity: 0.5;
-  }
-  50% {
-    opacity: 0.15;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .sig-wait {
-    animation: none;
-  }
-}
 @keyframes row-breathe {
   0%,
   100% {
