@@ -155,7 +155,7 @@ func (m *Manager) ListBare(id, machine, cwd, caller string) error {
 		return err
 	}
 	m.intoGroup(id, groupPath(machine, cwd), caller)
-	m.Refresh([]string{id})
+	m.RefreshSoon([]string{id})
 	return nil
 }
 
@@ -323,6 +323,19 @@ type fetcher interface {
 // named, hosted or not.
 func (m *Manager) Refresh(ids []string) {
 	m.publishList()
+	m.publishStates(ids)
+}
+
+// RefreshSoon is Refresh with the list made again apart, after: what asked (a channel made, kumo
+// 2026-11-26: the "+" waited on the whole list made twice, most of a second, more while
+// discovery was busy) is answered at once; the sessions' own states are set first.
+func (m *Manager) RefreshSoon(ids []string) {
+	m.publishStates(ids)
+	go m.publishList()
+}
+
+// publishStates sets the carried state of each session of ids.
+func (m *Manager) publishStates(ids []string) {
 	over, _ := m.o.Store.Overlays()
 	for _, id := range ids {
 		if h, err := m.get(id); err == nil {

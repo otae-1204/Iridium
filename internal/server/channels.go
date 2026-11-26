@@ -1132,7 +1132,7 @@ func (s *Server) createChannelAs(ctx context.Context, c caller, req api.NewSessi
 	}
 	setup.Nick, setup.On = "", nil
 	err = s.setUp(ctx, c, id, setup, req.Text)
-	s.m.Refresh([]string{id})
+	s.m.RefreshSoon([]string{id})
 	return true, err
 }
 
@@ -1906,6 +1906,20 @@ func (s *Server) memberRemove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	was, _ := s.memberRow(ch, member)
+	// ?archive=1: its session archived with it, in the one step (移出并归档, kumo, 2026-11-26):
+	// archived first, so the list never has it out of the channel and not yet archived (shown in
+	// its folder a moment, then gone).
+	if r.URL.Query().Get("archive") == "1" {
+		id, _ := store.SessionOfMember(member)
+		if _, err := s.using(c, id); err != nil {
+			s.error(w, err)
+			return
+		}
+		if err := s.m.ArchiveTree(r.Context(), id, true); err != nil {
+			s.error(w, err)
+			return
+		}
+	}
 	if err := s.ch.Leave(ch, member); err != nil {
 		s.memberFault(w, err)
 		return

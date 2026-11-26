@@ -6,6 +6,7 @@
 // implementation (MemberItems; its list, menu.ts). Its context and usage are not here: they
 // have their keys after its model's name (docs/前端设计规范.md "一样东西一个地方").
 import { Menu } from "@base-ui/react/menu";
+import { change } from "../../pending";
 import { Popover } from "@base-ui/react/popover";
 import { useQueryClient } from "@tanstack/react-query";
 import { AtSign, MessageCircle, Box, Check, CircleStop, FoldVertical, Mail, PencilLine, ScrollText, ShieldCheck, UserMinus } from "lucide-react";
@@ -389,8 +390,10 @@ export function RemoveAsk({ channel, member, nick, anchor, open, onOpenChange }:
   const out = async (archive: boolean) => {
     setBusy(archive ? "archive" : "out");
     try {
-      qc.setQueryData<ChannelMembers>(["members", channel], await api.removeMember(channel, member));
-      if (archive) await api.patch(id, { archived: true });
+      // 移出并归档 in the one request (the server archives it first, then takes it out): the list
+      // never has it out and not yet archived, shown in its folder a moment (kumo, 2026-11-26).
+      const ms = archive ? await change(id, { archived: true }, () => api.removeMember(channel, member, true)) : await api.removeMember(channel, member);
+      qc.setQueryData<ChannelMembers>(["members", channel], ms);
       done();
     } catch (e) {
       toast(t("err.action"), { error: true, description: memberError(e) });

@@ -4,7 +4,8 @@
 // stream; one dropped comes back, and its first states bring the page up to date. Drafts, the
 // agent's words as it writes them, go to the open chat alone.
 import { api } from "./api/client";
-import type { DraftEvent, StateEvent } from "./api/types.gen";
+import type { DraftEvent, Session, StateEvent } from "./api/types.gen";
+import { fromServer } from "./pending";
 import { getCarried, setCarried, type Link } from "./store";
 
 /** Told each draft event. */
@@ -71,7 +72,8 @@ function onState(raw: string) {
   // How far a channel is read, which the daemon holds only once someone read it since it began:
   // none said does not take away what the page asked for itself (chats.ts firstScreen).
   if (!e.ignored && e.value == null && e.key.startsWith("reads:") && getCarried(e.key)) return;
-  setCarried(e.key, e.ignored ? null : e.value);
+  // The list: the changes made here and not in it yet drawn over it (pending.ts).
+  setCarried(e.key, e.ignored ? null : e.key === "list" && Array.isArray(e.value) ? fromServer(e.value as Session[]) : e.value);
 }
 
 /** A PING on the open stream, one at a time; its PONG is the round trip, the top bar's dot. None

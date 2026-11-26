@@ -28,6 +28,7 @@ import { errText, toast } from "./toast";
 import { manages, useMachines, useMe, useSaidLine, useUpdate } from "./data";
 import { agentName, ago, cn, fine, IconKey, IrMark, keep, kept, Lamp, lampOf, Logo, own, sessionStatusText, statusText, tilde, Tip, titleOf, useEver, untitled, useLongPress, useMenuAt, useMinute, usePointAnchor, MenuPortal } from "./ui";
 import { AppName } from "./appkey";
+import { MAKING, patchSessions } from "./pending";
 import { isFavorite, placeFavorite, setFavorite, setFavoritesColor, useFavorites, useFavoritesColor } from "./favorites";
 import { PLACE_DRAG, SESSION_DRAG } from "./chat/refs";
 import { badge, isQuiet, setQuiet, useAt, useQuiet, useUnread } from "./unread";
@@ -36,7 +37,7 @@ import { CloudBadge, MachineFace, shownPath, useLate, useMachine, type Machine }
 import { getCarried, setCarried, useCarried, useLink, useList } from "./store";
 import { channelLamp, isMulti } from "./chat/channel/lib";
 import { useVoiceItem, VoiceDock, VoiceMark } from "./voice/dock";
-import { ANY, dropMark, dropTarget, endDrag, listDrop, pinFolder, placeFolder, placeGroup as placeGroupKey, placeSession, sortList, startDrag, touchDrag, useDragged, useOver, type Dragged, type Edge, type Over } from "./reorder";
+import { ANY, dropMark, dropTarget, endDrag, listDrop, pinFolder, placeFolder, placeGroup as placeGroupKey, placeSession, startDrag, touchDrag, useDragged, useOver, type Dragged, type Edge, type Over } from "./reorder";
 
 const STEP = 18;
 /** The deepest a folder is drawn in: those deeper are drawn as deep, the sidebar being narrow. */
@@ -207,13 +208,7 @@ export function Sidebar(p: Props) {
     const s = sibs.find((x) => x.id === id);
     if (!s) return;
     const at = placeSession(sibs, s, target, edge);
-    const was = getCarried<Session[]>("list");
-    const shown = was && sortList(was.map((x) => (x.id === id ? { ...x, ...at } : x)));
-    if (shown) setCarried("list", shown);
-    void api.patch(id, { order: at.order, ...(at.pinned !== !!s.pinned ? { pinned: at.pinned } : {}) }).catch((e: unknown) => {
-      if (getCarried("list") === shown) setCarried("list", was);
-      toast(t("err.action"), { error: true, description: errText(e) });
-    });
+    void patchSessions(id, { order: at.order, ...(at.pinned !== !!s.pinned ? { pinned: at.pinned } : {}) }).catch((e: unknown) => toast(t("err.action"), { error: true, description: errText(e) }));
   }, []);
   // Among my favorites: one of them moved, or one from anywhere put there.
   const placeFav = useCallback((id: string, target: Session, edge: Edge) => placeFavorite(id, target.id, edge), []);
@@ -763,7 +758,7 @@ function WsRow({ flip, id, name, root, sessions, hung, machine, remote, folders,
     // Those hung under its sessions go with them (the server's cascade): counted, not sent. The way
     // a group at another machine is no longer listed (the user, 2026-11-10).
     ...(sessions.length
-      ? [{ icon: <Archive size={15} />, label: t("menu.archiveHere", { n: sessions.length + hung.length }), sure: t("menu.archiveSure"), run: () => void Promise.all(sessions.map((s) => api.patch(s.id, { archived: true }))).then(() => toast(t("toast.archived")), failed) }]
+      ? [{ icon: <Archive size={15} />, label: t("menu.archiveHere", { n: sessions.length + hung.length }), sure: t("menu.archiveSure"), run: () => void patchSessions(sessions.map((s) => s.id), { archived: true }).then(() => toast(t("toast.archived")), failed) }]
       : []),
     // What was opened of its folded sessions, folded again (the user, 2026-11-22).
     ...(foldBack ? [{ icon: <ListCollapse size={15} />, label: t("menu.foldSessions"), run: foldBack }] : []),
@@ -1060,7 +1055,7 @@ const SessionRow = memo(function SessionRow({ s, where, depth, flip, selected, o
   // An archived one (no shown marker): one press brings it back.
   const restore = (e: React.MouseEvent) => {
     e.stopPropagation();
-    void api.patch(s.id, { archived: false }).then(
+    void patchSessions(s.id, { archived: false }).then(
       () => toast(t("toast.restored")),
       (err) => toast(t("err.action"), { error: true, description: errText(err) }),
     );
@@ -1099,7 +1094,8 @@ const SessionRow = memo(function SessionRow({ s, where, depth, flip, selected, o
         depth={depth}
         flip={flip}
         selected={selected}
-        onClick={() => !renaming && onSelect(s.id)}
+        // One being made (pending.ts making): nothing to open yet.
+        onClick={() => !renaming && !s.id.startsWith(MAKING) && onSelect(s.id)}
         faded={s.archived}
         aria={`${title}, ${told}${s.color ? `, ${t("color.tagged", { color: t(`color.${s.color}`) })}` : ""}${unread ? `, ${t("status.unreadCount", { n: badge(unread) })}` : ""}${at ? `, ${t(at.everyone ? "row.atAll" : "row.atMe")}` : ""}${quiet ? `, ${t("menu.quiet")}` : ""}`}
         icon={
@@ -1151,7 +1147,7 @@ export function Rename({ s, done, className }: { s: Session; done: () => void; c
     over.current = true;
     const to = value?.trim();
     done();
-    if (to !== undefined && to !== (s.name ?? "") && to !== titleOf(s)) await api.patch(s.id, { name: to }).catch((e) => toast(t("err.rename"), { error: true, description: errText(e) }));
+    if (to !== undefined && to !== (s.name ?? "") && to !== titleOf(s)) await patchSessions(s.id, { name: to }).catch((e) => toast(t("err.rename"), { error: true, description: errText(e) }));
   };
   return (
     <input
@@ -1184,11 +1180,11 @@ export function sessionActions(s: Session, rename: () => void): { icon: ReactNod
   // Archive first, the one most used (the user, 2026-11-06).
   return [
     s.archived
-      ? { icon: <ArchiveRestore size={15} />, label: t("menu.unarchive"), run: run(() => api.patch(s.id, { archived: false })) }
-      : { icon: <Archive size={15} />, label: t("menu.archive"), run: run(() => api.patch(s.id, { archived: true }), t("toast.archived")) },
+      ? { icon: <ArchiveRestore size={15} />, label: t("menu.unarchive"), run: run(() => patchSessions(s.id, { archived: false })) }
+      : { icon: <Archive size={15} />, label: t("menu.archive"), run: run(() => patchSessions(s.id, { archived: true }), t("toast.archived")) },
     // 收藏 (favorites.ts): one not archived, or one favoured to take it off.
     ...(!s.archived || isFavorite(s.id) ? [isFavorite(s.id) ? { icon: <BookmarkMinus size={15} />, label: t("menu.unfavorite"), run: () => setFavorite(s.id, false) } : { icon: <Bookmark size={15} />, label: t("menu.favorite"), run: () => setFavorite(s.id, true) }] : []),
-    s.pinned ? { icon: <PinOff size={15} />, label: t("menu.unpin"), run: run(() => api.patch(s.id, { pinned: false })) } : { icon: <Pin size={15} />, label: t("menu.pin"), run: run(() => api.patch(s.id, { pinned: true })) },
+    s.pinned ? { icon: <PinOff size={15} />, label: t("menu.unpin"), run: run(() => patchSessions(s.id, { pinned: false })) } : { icon: <Pin size={15} />, label: t("menu.pin"), run: run(() => patchSessions(s.id, { pinned: true })) },
     { icon: <Moon size={15} />, label: t(isQuiet(s.id) ? "menu.unquiet" : "menu.quiet"), run: () => setQuiet(s.id, !isQuiet(s.id)) },
     { icon: <Pencil size={15} />, label: t("menu.rename"), run: rename },
     { icon: <Copy size={15} />, label: t("menu.copyId"), run: run(() => navigator.clipboard.writeText(s.id), t("toast.copied")) },
@@ -1198,7 +1194,7 @@ export function sessionActions(s: Session, rename: () => void): { icon: ReactNod
 
 /** A session's colour tag, set from its menu. */
 export function sessionTags(s: Session): Tags {
-  return { value: s.color, set: (c) => void api.patch(s.id, { color: c as Color }).catch((e) => toast(t("err.action"), { error: true, description: errText(e) })) };
+  return { value: s.color, set: (c) => void patchSessions(s.id, { color: c as Color }).catch((e) => toast(t("err.action"), { error: true, description: errText(e) })) };
 }
 
 /** A folder's row in a workspace: its name, the "+" for a session in it; its menu (right click,
@@ -1235,7 +1231,7 @@ function FolderRow({ f, depth, label, hung, open, onToggle, foldBack, newSub, pl
   const all = folderSessions(f);
   const items = [
     ...(all.length
-      ? [{ icon: <Archive size={15} />, label: t("menu.archiveHere", { n: all.length + hung.length }), sure: t("menu.archiveSure"), run: () => void Promise.all(all.map((s) => api.patch(s.id, { archived: true }))).then(done(t("toast.archived")), failed) }]
+      ? [{ icon: <Archive size={15} />, label: t("menu.archiveHere", { n: all.length + hung.length }), sure: t("menu.archiveSure"), run: () => void patchSessions(all.map((s) => s.id), { archived: true }).then(done(t("toast.archived")), failed) }]
       : []),
     ...(foldBack ? [{ icon: <ListCollapse size={15} />, label: t("menu.foldSessions"), run: foldBack }] : []),
     ...(newSub ? [{ icon: <FolderPlus size={15} />, label: t("new.subFolder"), run: newSub }] : []),

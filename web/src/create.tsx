@@ -5,7 +5,8 @@
 // listed group holds: the file browser too; a channel is made in the folder it shows by its
 // 在此新建 (filebrowser.tsx).
 import { cloneElement, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactElement, type ReactNode } from "react";
-import type { Agent, Workspace } from "./api/types.gen";
+import type { Agent, Session, Workspace } from "./api/types.gen";
+import { making } from "./pending";
 import { api } from "./api/client";
 import { askAdd, keepList } from "./chat/channel/adding";
 import { useMachines } from "./data";
@@ -75,15 +76,21 @@ export async function newChannel(path: string, ms: Machine[], workspace?: number
  *  folder and kept in it (sub; kumo, 2026-11-25): a folder there gone into or made, 在此新建. */
 export function NewHere({ w, trigger, open, setOpen, opened, sub }: { w: Workspace; trigger: ReactElement; open: boolean; setOpen: (o: boolean) => void; opened: (id: string) => void; sub?: (at: BrowseAt) => void }) {
   const machines = useMachines();
-  const busy = useRef(false);
+  const [busy, setBusy] = useState(false);
   const here = async () => {
-    if (busy.current) return;
-    busy.current = true;
+    if (busy) return;
+    const at = whereOf(w.path, machines);
+    if (!at) return;
+    setBusy(true);
     try {
-      const id = await newChannel(w.path, machines, w.id);
+      // Its row at the top of the folder at once (pending.ts making; kumo, 2026-11-26: the "+"
+      // pressed, nothing till the server had made it, a second or more), opened once made.
+      const now = Date.now();
+      const row = { agent: "" as Agent, cwd: at.cwd, machine: at.machine, workspace: w.id || undefined, bare: true, status: "idle", hosted: false, live: false, updatedAt: now, createdAt: now } as Omit<Session, "id">;
+      const id = await making(row, () => newChannelAt(at.cwd, at.machine, w.id));
       if (id) opened(id);
     } finally {
-      busy.current = false;
+      setBusy(false);
     }
   };
   const browse = () => {
@@ -99,8 +106,9 @@ export function NewHere({ w, trigger, open, setOpen, opened, sub }: { w: Workspa
     browse();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
-  return cloneElement(trigger as ReactElement<{ onClick?: (e: MouseEvent) => void; onContextMenu?: (e: MouseEvent) => void }>, {
+  return cloneElement(trigger as ReactElement<{ onClick?: (e: MouseEvent) => void; onContextMenu?: (e: MouseEvent) => void; "aria-busy"?: boolean }>, {
     onClick: (e: MouseEvent) => (e.stopPropagation(), void here()),
+    "aria-busy": busy || undefined,
     onContextMenu: (e: MouseEvent) => (e.preventDefault(), e.stopPropagation(), browse()),
   });
 }

@@ -1577,3 +1577,23 @@ func TestBareChannelsReadOnce(t *testing.T) {
 		}
 	}
 }
+
+// 移出并归档 in one step (kumo, 2026-11-26): the member out and its session archived by the one
+// request, archived first, so the list never has it out of the channel and not yet archived.
+func TestRemoveAndArchive(t *testing.T) {
+	t.Parallel()
+	l, ch, second := two(t)
+	var ms api.ChannelMembers
+	l.want(200, "web", "DELETE", "/v1/internal/channels/"+ch+"/members/agent:"+second+"?archive=1", nil, &ms)
+	for _, m := range ms.Members {
+		if m.Member == "agent:"+second {
+			t.Fatalf("still a member: %+v", ms)
+		}
+	}
+	var st api.SessionState
+	if l.want(200, "web", "GET", "/v1/internal/sessions/"+second, nil, &st); !st.Archived {
+		t.Errorf("its session after 移出并归档: %+v", st.Session)
+	}
+	// An agent's ir may not.
+	l.want(403, "agent-in:"+ch, "DELETE", "/v1/internal/channels/"+ch+"/members/agent:"+ch+"?archive=1", nil, nil)
+}
