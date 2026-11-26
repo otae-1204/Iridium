@@ -3,47 +3,56 @@
 // one favoured (a row's menu) and goes with the last one taken off. One level, nothing made in it;
 // a channel there stays in its own group too. Kept by the server under the login, so it follows the
 // person to every device (internal/server/favorites.go); another's changes nothing of mine.
-import { keepPreviousData } from "@tanstack/react-query";
-import { useSyncExternalStore } from "react";
-import { api, missing } from "./api/client";
+import { useEffect, useSyncExternalStore } from "react";
+import { api, missing, queryClient } from "./api/client";
 import { useQuery } from "./api/query";
 import { t } from "./i18n";
 import { useCarried } from "./store";
 import { errText, toast } from "./toast";
 import type { Edge } from "./reorder";
 
-/** The list as changed here, till the server has said it back: drawn in place of what it says. */
+/** One key, asked again as the carried count moves: a key a count would leave the list empty for
+ *  a moment (the new key's first fetch) after a change, the block gone and back (kumo, 2026-11-26). */
+const KEY = ["favorites"];
+/** The list as changed here, till the server has said it back: drawn in place of the cache. */
 let mine: string[] | null = null;
-/** The list the server last said (useFavorites keeps it). */
-let known: string[] = [];
 /** The changes, one after another: the last one put is what stays. */
 let queue: Promise<unknown> = Promise.resolve();
+/** The carried count last asked again for. */
+let seen: number | undefined;
 const subs = new Set<() => void>();
 const emit = () => subs.forEach((f) => f());
 const subscribe = (f: () => void) => (subs.add(f), () => void subs.delete(f));
 const NONE: string[] = [];
 
-/** Asked again as anyone's favorites change: the carried "favorites", a count. */
-const favQ = (v: number) => ({ queryKey: ["favorites", v], queryFn: () => api.favorites().then((f) => f.channels ?? NONE).catch((e) => (missing(e) ? NONE : Promise.reject(e))), staleTime: 30_000 });
+const favQ = { queryKey: KEY, queryFn: () => api.favorites().then((f) => f.channels ?? NONE).catch((e) => (missing(e) ? NONE : Promise.reject(e))), staleTime: 30_000 };
 
 /** My favorites, by channel id, in my order. */
 export function useFavorites(): string[] {
-  const v = useCarried<number>("favorites") ?? 0;
-  const q = useQuery({ ...favQ(v), placeholderData: keepPreviousData });
-  known = q.data ?? NONE;
-  return useSyncExternalStore(subscribe, () => mine) ?? known;
+  const v = useCarried<number>("favorites");
+  useEffect(() => {
+    if (v === undefined || v === seen) return;
+    const first = seen === undefined;
+    seen = v;
+    if (!first) void queryClient.invalidateQueries({ queryKey: KEY });
+  }, [v]);
+  const q = useQuery(favQ, queryClient);
+  const local = useSyncExternalStore(subscribe, () => mine);
+  return local ?? q.data ?? NONE;
 }
 
-const now = () => mine ?? known;
+const now = () => mine ?? queryClient.getQueryData<string[]>(KEY) ?? NONE;
 
-/** Makes my favorites list: drawn so at once, then put; a failed put drawn back as it was. */
+/** Makes my favorites list: drawn so at once, then put; what the server says back goes into the
+ *  cache before the local list gives way to it, so the list never steps back. A failed put: as it was. */
 function put(list: string[]) {
   mine = list;
   emit();
+  void queryClient.cancelQueries({ queryKey: KEY });
   queue = queue.then(() =>
     api.putFavorites(list).then(
       (f) => {
-        known = f.channels ?? NONE;
+        queryClient.setQueryData(KEY, f.channels ?? NONE);
         if (mine === list) (mine = null), emit();
       },
       (e: unknown) => {
