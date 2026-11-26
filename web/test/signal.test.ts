@@ -28,5 +28,5 @@ test("cut off, whatever the last round trip; not measured yet, waiting", () => {
 });
 
 test("five bars, rising, the tallest within the 12px box", () => {
-  expect(BARS).toEqual([3.5, 5.5, 7.5, 9.5, 11.5]);
+  expect(BARS).toEqual([3.2, 4.8, 6.6, 8.4, 10.2]);
 });

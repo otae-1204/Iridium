@@ -1,16 +1,17 @@
 // The work key (kumo + Neon, 2026-11-26, in place of the floating work bar): in the channel's top
-// bar, left of the members' key and drawn as it is, there only while one of its agents works: 回复中
-// while a turn runs, 后台 while only its background tasks do (Claude's subagents and commands sent
+// bar, left of the members' key and drawn as it is, there only while one of its agents works: what its
+// turn is at (思考中, a tool's name, 输出中, 待确认, 压缩中, else 运行中) while a turn runs, 后台 while only its background tasks do (Claude's subagents and commands sent
 // to the background, Codex's subagents, dsh's jobs). Folded it is one shape whatever the count: the
 // faces of those at work overlapped (3 on a computer, 2 on a phone), how many they are, a tiny faint
 // dot breathing; it grows only with the count. Pressed, the top bar's own panel: each agent a group,
-// its row (回复中 or 后台 and how long; pressed, to the message it writes; ■ stops the turn), its
+// its row (what its turn is at, or 后台, and how long; pressed, its tasks folded; ⌖ to the message
+// it writes; ■ stops the turn), its
 // tasks under it (sort, what, steps, how long; ■ where the agent stops one alone; a subagent's
 // pressed, its record). The members' old 在干活的子代理 are its tasks too. A task ended stays a
 // moment, marked done. A stop key asks once (确认停止) before it stops. In a chat of one agent the
 // key is there only for its tasks: its turn has the message's own line.
 import { Menu } from "@base-ui/react/menu";
-import { Bot, ListChecks, Square, SquareTerminal } from "lucide-react";
+import { Bot, ChevronRight, ListChecks, LocateFixed, Square, SquareTerminal } from "lucide-react";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { api } from "../../api/client";
 import type { Session, SessionState, Status } from "../../api/types.gen";
@@ -25,7 +26,7 @@ import { subName } from "../subwork";
 import { MemberFace } from "./face";
 import { ITEM, POPUP } from "./invite";
 import type { AgentRow, Msg } from "./lib";
-import { clockOf, DONE_FOR, folded, looseSubs, phaseOf, settle, settling, subOf, taskKind, workers, writingOf, type Shown, type Worker } from "./workstate";
+import { clockOf, DONE_FOR, folded, looseSubs, phaseOf, settle, settling, stageOf, subOf, taskKind, workers, writingOf, type Stage, type Shown, type Worker } from "./workstate";
 
 /** What the channel's page lends the key while its conversation is drawn: its agents and their
  *  states, its messages, its way to one of them; may: the one looking may stop; solo: one agent. */
@@ -139,10 +140,12 @@ export function WorkKey({ id }: { id: string }) {
                   now={now}
                   since={since(w)}
                   may={l.may}
-                  jump={() => {
-                    const m = writingOf(l.msgs, w.a.session) ?? l.msgs.findLast((x) => x.author.kind === "agent" && x.author.session === w.a.session);
-                    if (m) l.jump(m.n);
-                  }}
+                  stage={stageOf(l.stateAt(w.a.session)?.status, writingOf(l.msgs, w.a.session))}
+                  jump={(() => {
+                    // Only to the message its turn writes now; none yet, no key (its room kept).
+                    const m = writingOf(l.msgs, w.a.session);
+                    return m ? () => l.jump(m.n) : undefined;
+                  })()}
                   record={(task) => {
                     const s = subOf(list, w.a.session, task);
                     return s ? () => openRecord(s.id) : undefined;
@@ -196,24 +199,50 @@ const ROW = "flex min-w-0 items-center gap-1";
 const kindIcon = { agent: Bot, shell: SquareTerminal, task: ListChecks } as const;
 const kindWord = { agent: "bar.agent", shell: "bar.shell", task: "bar.task" } as const;
 
-/** One agent's group in the panel: its row, then its tasks. */
-function Group({ w, now, since, may, jump, record }: { w: Worker<AgentRow>; now: number; since: number; may: boolean; jump: () => void; record: (t: Shown) => (() => void) | undefined }) {
+/** A stage's words: the tool's own name while a call goes on. */
+const stageWord = (st: Stage) => (st.kind === "tool" ? st.tool : t(`bar.${st.kind}`));
+
+/** One agent's group in the panel: its row, then its tasks. The row itself only folds its tasks
+ *  (none, it is no key at all); going to its message and stopping it are keys of their own at its
+ *  right (kumo + Neon, 2026-11-26: the whole row a jump was too easy to press). */
+function Group({ w, now, since, may, stage, jump, record }: { w: Worker<AgentRow>; now: number; since: number; may: boolean; stage: Stage; jump?: () => void; record: (t: Shown) => (() => void) | undefined }) {
   const replying = w.phase === "reply";
+  const [shut, setShut] = useState(false);
+  const folds = w.tasks.length > 0;
+  const body = (
+    <>
+      <MemberFace member={w.a.member} agent={w.a.agent} size={18} />
+      <span className="min-w-0 truncate font-medium text-ink">{w.a.nick || w.a.name}</span>
+      {folds && <ChevronRight size={13} aria-hidden className={cn("-ml-1 shrink-0 text-ink-4 transition-transform duration-(--dur-2)", !shut && "rotate-90")} />}
+      <span key={replying ? stageWord(stage) : "back"} className="g-fade min-w-0 shrink-[2] truncate text-sm text-ink-3">
+        {replying ? stageWord(stage) : t("bar.back", { n: w.running })}
+      </span>
+      <span className="flex-1" />
+      {replying && <span className={TIMER}>{clockOf(now - since)}</span>}
+    </>
+  );
   return (
     <>
       <div className={ROW}>
-        <Menu.Item onClick={jump} className={cn(ITEM, "min-w-0 flex-1 gap-2")}>
-          <MemberFace member={w.a.member} agent={w.a.agent} size={18} />
-          <span className="min-w-0 truncate font-medium text-ink">{w.a.nick || w.a.name}</span>
-          <span className="shrink-0 text-sm text-ink-3">{replying ? t("bar.reply") : t("bar.back", { n: w.running })}</span>
-          <span className="flex-1" />
-          {replying && <span className={TIMER}>{clockOf(now - since)}</span>}
-        </Menu.Item>
+        {folds ? (
+          <Menu.Item closeOnClick={false} onClick={() => setShut((v) => !v)} aria-expanded={!shut} className={cn(ITEM, "min-w-0 flex-1 gap-2")}>
+            {body}
+          </Menu.Item>
+        ) : (
+          <div className={cn(ITEM, "min-w-0 flex-1 gap-2 data-highlighted:bg-transparent")}>{body}</div>
+        )}
+        {replying && jump ? (
+          <Tip label={t("bar.locate")} side="top">
+            <Menu.Item aria-label={t("bar.locate")} onClick={jump} className="g-press grid size-6 shrink-0 place-items-center rounded-md text-ink-3 outline-none data-highlighted:bg-fill data-highlighted:text-ink pointer-coarse:size-8">
+              <LocateFixed size={13} aria-hidden />
+            </Menu.Item>
+          </Tip>
+        ) : (
+          <NoKey />
+        )}
         {replying && may ? <StopSure label={t("bar.stop")} run={() => stopTurn(w.a.session)} /> : <NoKey />}
       </div>
-      {w.tasks.map((x) => (
-        <TaskRow key={x.id} session={w.a.session} task={x} now={now} may={may} open={record(x)} />
-      ))}
+      {!shut && w.tasks.map((x) => <TaskRow key={x.id} session={w.a.session} task={x} now={now} may={may} open={record(x)} />)}
     </>
   );
 }
@@ -240,6 +269,7 @@ function TaskRow({ session, task, now, may, open }: { session: string; task: Sho
       <Menu.Item disabled={!open || done} onClick={open} className={cn(ITEM, "min-w-0 flex-1 gap-2 pl-8 data-disabled:data-highlighted:bg-transparent")}>
         {body}
       </Menu.Item>
+      <NoKey />
       {task.stop && may && !done ? (
         <StopSure
           label={t("bar.stop")}

@@ -1,10 +1,10 @@
-// The work bar's state (src/chat/channel/workstate.ts): 回复中 while a turn runs, 后台 while only
+// The work bar's state (src/chat/channel/workstate.ts): what a turn is at while it runs, 后台 while only
 // background tasks do, idle else; a task ended stays a moment marked done; who the bar shows.
 import { describe, expect, test } from "vitest";
 import type { Msg } from "../src/chat/channel/lib";
 import { bgLaunch } from "../src/chat/fold";
 import type { Session } from "../src/api/types.gen";
-import { clockOf, DONE_FOR, folded, looseSubs, phaseOf, settle, taskKind, workers, writingOf, type Phase, type Shown } from "../src/chat/channel/workstate";
+import { clockOf, DONE_FOR, folded, looseSubs, phaseOf, settle, stageOf, taskKind, workers, writingOf, type Phase, type Shown } from "../src/chat/channel/workstate";
 
 describe("phaseOf", () => {
   test("a turn going on is 回复中, its tasks or not", () => {
@@ -136,4 +136,17 @@ test("bgLaunch: a call sent to the background", () => {
   expect(bgLaunch({ name: "Bash", input: JSON.stringify({ command: "npm run build", run_in_background: true }) })).toBe("shell");
   expect(bgLaunch({ name: "Bash", input: JSON.stringify({ command: "ls" }) })).toBeUndefined();
   expect(bgLaunch({ name: "Monitor", input: "{}" })).toBe("shell");
+});
+
+describe("stageOf", () => {
+  const w = (steps: number, running: boolean, tool?: string) => ({ work: { steps, running, tool, from: 0 } });
+  test("says what the turn is at", () => {
+    expect(stageOf("waiting", w(2, true, "Bash"))).toEqual({ kind: "need" });
+    expect(stageOf("compacting")).toEqual({ kind: "compact" });
+    expect(stageOf("running", w(0, true))).toEqual({ kind: "think" });
+    expect(stageOf("running", w(3, true, "Bash"))).toEqual({ kind: "tool", tool: "Bash" });
+    expect(stageOf("running", w(3, true))).toEqual({ kind: "run" });
+    expect(stageOf("running", { writing: true })).toEqual({ kind: "write" });
+    expect(stageOf("running")).toEqual({ kind: "run" });
+  });
 });

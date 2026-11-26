@@ -36,9 +36,10 @@ export function LinkDot({ className, side = "bottom" }: { className?: string; si
     );
   const label = link.live === false ? t("top.offline") : link.rtt !== null ? t("top.online", { ms: link.rtt }) : t("top.connecting");
   // No words by it (kumo + Neon, 2026-11-26): the exact round trip in its Tip, pointed at or pressed.
+  // Close after the name (kumo, 2026-11-26): its room to press reaches back into the gap before it.
   return (
     <Tip label={label} side={side} tap>
-      <button type="button" className={cn("grid h-6 place-items-center rounded-md px-1.5 outline-none", className)} role="status" aria-label={label}>
+      <button type="button" className={cn("-ml-2 grid h-6 place-items-center rounded-md px-1 outline-none", className)} role="status" aria-label={label}>
         <SignalIcon s={signalOf(link.live, link.rtt)} />
       </button>
     </Tip>
@@ -47,18 +48,18 @@ export function LinkDot({ className, side = "bottom" }: { className?: string; si
 
 const TONE = { run: "var(--run)", need: "var(--need)", err: "var(--err)" } as const;
 
-/** Five bars, bottom-aligned, 15×12: as many lit as the signal says in its tone, the rest faint;
+/** Five round-ended bars, bottom-aligned, 16×12: as many lit as the signal says in its tone, the rest faint;
  *  cut off, all dark under a thin red slash; not measured yet, all faint, breathing. */
 export function SignalIcon({ s }: { s: Signal }) {
   return (
-    <svg width={15} height={12} viewBox="0 0 15 12" aria-hidden className={cn("block", s.kind === "wait" && "sig-wait")}>
+    <svg width={16} height={12} viewBox="0 0 16 12" aria-hidden className={cn("block", s.kind === "wait" && "sig-wait")}>
       {BARS.map((h, i) => {
         const lit = s.kind === "lit" && i < s.bars;
         const fill = lit ? TONE[s.tone] : s.kind === "off" ? "var(--ink-3)" : "var(--ink-4)";
-        return <rect key={i} x={i * 3.25} y={12 - h} width={2} height={h} rx={1} fill={fill} opacity={lit || s.kind === "off" ? 1 : s.kind === "wait" ? 0.5 : 0.22} className="transition-[fill,opacity] duration-(--dur-2)" />;
+        return <rect key={i} x={i * 3.45} y={12 - h} width={2.2} height={h} rx={1.1} fill={fill} opacity={lit || s.kind === "off" ? 1 : s.kind === "wait" ? 0.5 : 0.22} className="transition-[fill,opacity] duration-(--dur-2)" />;
       })}
       {s.kind === "off" && (
-        <line x1={1.5} y1={11.5} x2={13.5} y2={0.5} stroke="var(--err)" strokeWidth={1.25} strokeLinecap="round" />
+        <line x1={1.5} y1={11.5} x2={14.5} y2={1.5} stroke="var(--err)" strokeWidth={1.25} strokeLinecap="round" />
       )}
     </svg>
   );

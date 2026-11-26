@@ -103,6 +103,19 @@ export function writingOf(msgs: Msg[], session: string): Msg | undefined {
   return undefined;
 }
 
+/** What an agent's turn is at now, for its row (kumo + Neon, 2026-11-26, in place of 回复中):
+ *  waiting on an answer, compacting, a call going on (its tool's name), thinking before its first,
+ *  writing its words; else just running. m: the message it writes (writingOf). */
+export type Stage = { kind: "need" | "compact" | "think" | "write" | "run" } | { kind: "tool"; tool: string };
+export function stageOf(status: string | undefined, m?: Pick<Msg, "work" | "writing">): Stage {
+  if (status === "waiting") return { kind: "need" };
+  if (status === "compacting") return { kind: "compact" };
+  const w = m?.work;
+  if (w?.running) return w.steps && w.tool ? { kind: "tool", tool: w.tool } : w.steps ? { kind: "run" } : { kind: "think" };
+  if (m?.writing) return { kind: "write" };
+  return { kind: "run" };
+}
+
 /** A timer's words: m:ss, h:mm:ss past an hour. */
 export function clockOf(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));

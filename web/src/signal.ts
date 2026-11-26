@@ -17,5 +17,5 @@ export function signalOf(live: boolean | null, rtt: number | null): Signal {
   return { kind: "lit", bars: 1, tone: "err" };
 }
 
-/** The bars' heights (px), shortest first, in a 15×12 box. */
-export const BARS = [3.5, 5.5, 7.5, 9.5, 11.5] as const;
+/** The bars' heights (px), shortest first, in a 16×12 box (kumo, 2026-11-26: rounder, lower). */
+export const BARS = [3.2, 4.8, 6.6, 8.4, 10.2] as const;
