@@ -145,12 +145,13 @@ func serve(cfgPath string) int {
 	d := discover.New(do)
 	var srv *server.Server // names terminals in source tags, once it is there
 	tag := func(id string) string { return srv.Tag(id) }
+	owner := func(id string) string { return srv.Owner(id) }
 	executors := &remote.Hub{Logf: log.Printf, Self: machineid.Hash()}
 	// The harnesses' own channels (internal/harness): only here is an agent's own code wired in.
 	dshChannel := hdsh.New(hdsh.Options{Remote: executors, Logf: log.Printf})
 	defer dshChannel.Close()
 	channels := harness.Set{api.AgentDsh: dshChannel}
-	m, err := session.New(session.Options{Config: cfg, Store: st, Hub: h, Launcher: launcher(state), UnitPrefix: cfg.UnitPrefix, Discovery: d, Tag: tag, Remote: executors, Channels: channels})
+	m, err := session.New(session.Options{Config: cfg, Store: st, Hub: h, Launcher: launcher(state), UnitPrefix: cfg.UnitPrefix, Discovery: d, Tag: tag, Owner: owner, Remote: executors, Channels: channels})
 	if err != nil {
 		log.Print(err)
 		return 1

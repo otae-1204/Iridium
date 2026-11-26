@@ -56,3 +56,15 @@ func (s *Server) originOf(id string) (gate.Identity, bool) {
 	}
 	return gate.Identity{}, false
 }
+
+// Owner is the ID usage of session id's turn is counted to: its origin's (session.Options.Owner).
+func (s *Server) Owner(id string) string {
+	if s == nil {
+		return ""
+	}
+	o, ok := s.originOf(id)
+	if !ok {
+		return ""
+	}
+	return o.ID()
+}
