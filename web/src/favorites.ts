@@ -10,6 +10,7 @@ import { useQuery } from "./api/query";
 import { t } from "./i18n";
 import { useCarried } from "./store";
 import { errText, toast } from "./toast";
+import { keep, kept } from "./ui";
 import type { Edge } from "./reorder";
 
 /** One key, asked again as the carried count moves: a key a count would leave the list empty for
@@ -27,7 +28,35 @@ const subscribe = (f: () => void) => (subs.add(f), () => void subs.delete(f));
 const NONE: string[] = [];
 const EMPTY: Favorites = { channels: NONE };
 
-const favQ = { queryKey: KEY, queryFn: () => api.favorites().catch((e) => (missing(e) ? EMPTY : Promise.reject(e))), staleTime: 30_000 };
+/** The list as last known here, kept on the device: the page reloaded draws the block with the
+ *  sessions' list, not a moment after it, the groups pushed down (kumo, 2026-11-26). Asked again
+ *  at once all the same. */
+const STORED = "favorites";
+const stored = (): Favorites | undefined => {
+  try {
+    const f = JSON.parse(kept(STORED) ?? "null") as Favorites | null;
+    return f && Array.isArray(f.channels) ? f : undefined;
+  } catch {
+    return undefined;
+  }
+};
+/** f into the cache, and kept on the device. */
+const known = (f: Favorites) => {
+  queryClient.setQueryData(KEY, f);
+  keep(STORED, JSON.stringify(f));
+};
+
+const favQ = {
+  queryKey: KEY,
+  queryFn: () =>
+    api.favorites().then(
+      (f) => (keep(STORED, JSON.stringify(f)), f),
+      (e) => (missing(e) ? EMPTY : Promise.reject(e)),
+    ),
+  initialData: stored,
+  initialDataUpdatedAt: 0,
+  staleTime: 30_000,
+};
 
 /** My favorites, by channel id, in my order. */
 export function useFavorites(): string[] {
@@ -52,7 +81,7 @@ export function setFavoritesColor(c: Color | "") {
   void queryClient.cancelQueries({ queryKey: KEY });
   queryClient.setQueryData<Favorites>(KEY, { ...was, color: c || undefined });
   void api.patchFavorites({ color: c as Color }).then(
-    (f) => queryClient.setQueryData(KEY, f),
+    (f) => known(f),
     (e: unknown) => {
       queryClient.setQueryData(KEY, was);
       toast(t("err.action"), { error: true, description: errText(e) });
@@ -71,7 +100,7 @@ function put(list: string[]) {
   queue = queue.then(() =>
     api.putFavorites(list).then(
       (f) => {
-        queryClient.setQueryData(KEY, f);
+        known(f);
         if (mine === list) (mine = null), emit();
       },
       (e: unknown) => {
