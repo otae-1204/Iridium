@@ -1,6 +1,6 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { api, queryClient } from "../src/api/client";
 import { favoriteAt, setFavorite, useFavorites } from "../src/favorites";
 import { setCarried } from "../src/store";
@@ -8,6 +8,30 @@ import { setCarried } from "../src/store";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe("favorites", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    queryClient.removeQueries({ queryKey: ["favorites"] });
+  });
+
+  // kumo, 2026-11-26: reloaded, the block came a moment after the list, the groups pushed down.
+  test("reloaded: the list kept on the device drawn at once, then asked again", async () => {
+    localStorage.setItem("favorites", JSON.stringify({ channels: ["A", "B"] }));
+    const got = vi.spyOn(api, "favorites").mockResolvedValue({ channels: ["B"] });
+    const seen: string[][] = [];
+    function Probe() {
+      seen.push(useFavorites());
+      return null;
+    }
+    const host = document.createElement("div");
+    document.body.append(host);
+    await act(async () => createRoot(host).render(<Probe />));
+    await act(async () => void (await new Promise((r) => setTimeout(r, 10))));
+    expect(seen[0]).toEqual(["A", "B"]);
+    expect(got).toHaveBeenCalled();
+    expect(seen.at(-1)).toEqual(["B"]);
+    expect(JSON.parse(localStorage.getItem("favorites")!)).toEqual({ channels: ["B"] });
+  });
+
   test("a favourite moved, or one from elsewhere put, at a row's edge", () => {
     expect(favoriteAt(["a", "b", "c"], "c", "a", "top")).toEqual(["c", "a", "b"]);
     expect(favoriteAt(["a", "b", "c"], "a", "c", "bottom")).toEqual(["b", "c", "a"]);
