@@ -19,6 +19,11 @@ import { cn } from "../ui";
  *  third of a move (motion.css --move): a line written pushes the rest up by a line at once, not a
  *  few lines behind (kumo, 2026-11-25). */
 export const approach = (left: number, ms: number, tau: number) => left * Math.exp(-ms / tau);
+/** More than the pane's own height left to the end is not a line written: a page come at once (a
+ *  tab back in front with all that was said while it was behind, a first screen filled late, a
+ *  long message whole). Eased, it ran through all of it, top to bottom (kumo, 2026-11-26: Zen,
+ *  back from another tab); it is put at the end at once. */
+export const far = (left: number, pane: number) => pane > 0 && left > pane;
 /** A person scrolling (a wheel, a finger, a key, the scrollbar) has the scroll to itself this
  *  long after each of its moves: the follow writes no place meanwhile, so a trackpad's glide and
  *  bounce at the end are not cut each frame (kumo, 2026-11-25). */
@@ -189,6 +194,7 @@ export function Stick({ tail, older, draw, place, style, children, scroller, bot
     const y = leftOf(el);
     if (y > s.left + 0.5) moveLog("stick.follow", "grew", { dy: -Math.round(y - s.left) });
     if (y <= 0.5 || reduced() || document.hidden) return void (y > 0.5 ? pin(el, "reduced") : stop());
+    if (far(y, el.clientHeight) && !hands()) return void pin(el, "far");
     // In a person's hands: the way left kept as it is, gone on with once they let go.
     if (hands()) return void ((s.left = y), (s.frame = requestAnimationFrame(step)));
     s.left = approach(y, dt, motion.move() / 3);
@@ -259,8 +265,10 @@ export function Stick({ tail, older, draw, place, style, children, scroller, bot
     const was = s.tail;
     s.tail = tail;
     if (!s.drawn) {
-      // Opened: drawn at its newest, or where it was left, in the first frame.
-      s.drawn = true;
+      // Opened: drawn at its newest, or where it was left, in the first frame. With nothing in it
+      // yet (its rows read late), the frame they come in is that first one: not followed down to
+      // from the top.
+      s.drawn = !!el.firstElementChild?.firstElementChild;
       // First opened with messages not read yet (kumo, 2026-11-26): at the last one read, its
       // foot at the pane's, as it was left; not at the newest.
       const first = !place.opened && !!el.querySelector("[data-seq]");
@@ -311,7 +319,7 @@ export function Stick({ tail, older, draw, place, style, children, scroller, bot
       // the change does not move and what is over it does, both ways alike (kumo, 2026-11-24).
       // Not held off by a person's scrolling: a trackpad's glide still sends wheels after it, and
       // the end went down and came back (kumo, 2026-11-25: 贴底时直接往上).
-      if (s.following) pane ? pin(el, "pane") : sizing(el) ? pin(el, "own") : run();
+      if (s.following) pane ? pin(el, "pane") : sizing(el) ? pin(el, "own") : far(leftOf(el), el.clientHeight) && !hands() ? pin(el, "far") : run();
       mark(el);
     });
     ro.observe(el);
@@ -339,13 +347,20 @@ export function Stick({ tail, older, draw, place, style, children, scroller, bot
     const lift = () => void (s.drag = false);
     const on: [EventTarget, string, (e: never) => void][] = [[el, "wheel", wheel], [el, "touchstart", touch], [el, "touchmove", touch], [el, "keydown", key], [el, "pointerdown", press], [window, "pointerup", lift], [window, "pointercancel", lift]];
     for (const [at, k, f] of on) at.addEventListener(k, f as EventListener, { passive: true, capture: at === window });
-    const hide = () => document.visibilityState === "hidden" && saveLeft();
+    // Behind another tab nothing is drawn: no frame, no change of height told, so what was said
+    // meanwhile was followed by nothing, and all of it eased through as the tab came back. In front
+    // again (or taken out of the browser's keep of pages left), following: at the end before the
+    // first frame.
+    const shown = () => void (s.following && !document.hidden && ((s.last = performance.now()), pin(el, "shown")));
+    const hide = () => (document.visibilityState === "hidden" ? saveLeft() : shown());
     window.addEventListener("pagehide", saveLeft);
+    window.addEventListener("pageshow", shown);
     document.addEventListener("visibilitychange", hide);
     return () => {
       clearTimeout(saving.current);
       saveLeft();
       window.removeEventListener("pagehide", saveLeft);
+      window.removeEventListener("pageshow", shown);
       document.removeEventListener("visibilitychange", hide);
       ro.disconnect();
       stop();

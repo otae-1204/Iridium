@@ -1,7 +1,7 @@
 // The conversation's follow (chat/stick.tsx approach): eased to the end, never past it, and what
 // comes meanwhile never makes it stand or slow.
 import { describe, expect, test } from "vitest";
-import { approach, overFoot } from "../src/chat/stick";
+import { approach, far, overFoot } from "../src/chat/stick";
 
 describe("the follow", () => {
   const tau = 220;
@@ -38,5 +38,17 @@ describe("what changes over the last row", () => {
     expect(overFoot({ el: last, at: 400 }, null)).toBe(0);
     expect(overFoot({ el: last, at: 400 }, 400.3)).toBe(0);
     expect(overFoot(null, 400)).toBe(0);
+  });
+});
+
+// More than a pane left to the end is no line written: put there at once, not eased through.
+describe("far from the end", () => {
+  test("is more than the pane's height left", () => {
+    expect(far(601, 600)).toBe(true);
+    expect(far(600, 600)).toBe(false);
+    expect(far(40, 600)).toBe(false);
+  });
+  test("is nothing for a pane not laid out", () => {
+    expect(far(5000, 0)).toBe(false);
   });
 });
