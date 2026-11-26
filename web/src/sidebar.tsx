@@ -151,19 +151,6 @@ export function Sidebar(p: Props) {
   const list = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(() => clampWidth(Number(kept(WIDTH_KEY)) || WIDTH.start));
   useLayoutEffect(() => void document.documentElement.style.setProperty("--sidebar-w", `${p.phone || p.shut ? 0 : width}px`), [width, p.phone, p.shut]);
-  // Shut or opened: its box's width slides, the list inside keeping its own width (no rewrapping
-  // as it goes); only then, not as it is dragged.
-  const [wasShut, setWasShut] = useState(p.shut);
-  const [sliding, setSliding] = useState(false);
-  if (wasShut !== p.shut) {
-    setWasShut(p.shut);
-    setSliding(true);
-  }
-  useEffect(() => {
-    if (!sliding) return;
-    const t = setTimeout(() => setSliding(false), 1000);
-    return () => clearTimeout(t);
-  }, [sliding]);
   const [plusOpen, setPlusOpen] = useState<string | null>(null);
   // A confirmation an agent's ir asked for lights its session's lamp; one of no session listed
   // here is a row of its own at the top (no 需要你 group: the user, 2026-11-08). The sessions a
@@ -545,11 +532,12 @@ export function Sidebar(p: Props) {
     </aside>
   );
   if (p.phone) return aside;
+  // Shut or opened at once, no slide (kumo, 2026-11-26: two [Ir] Iridium side by side as it slid,
+  // the rows cut in half); the box kept, the list in it keeping its own width.
   return (
     <div
       inert={p.shut || undefined}
-      onTransitionEnd={(e) => e.target === e.currentTarget && setSliding(false)}
-      className={cn("relative h-full shrink-0", (p.shut || sliding) && "overflow-hidden", sliding && "transition-[width] duration-(--move) ease-(--ease-out)")}
+      className={cn("relative h-full shrink-0", p.shut && "overflow-hidden")}
       style={{ width: p.shut ? 0 : width }}
     >
       {aside}
