@@ -16,7 +16,7 @@ import { moveDown } from "./stick";
 import { useAway, Where } from "./away";
 import type { Did, Work } from "./channel/lib";
 import { cmdOfCall, isShell, type Cmd } from "./cmd";
-import { diffSum, foldLine, kindOf, runCmds, type Step } from "./fold";
+import { bgLaunch, diffSum, foldLine, kindOf, runCmds, type Step } from "./fold";
 import { StopKey } from "./live";
 import { Pictures } from "./pictures";
 import { DiffStat, KindIcon, lasted, ROW, StepCard, StepLine, tok, took, tookOf, wholeAhead } from "./said";
@@ -179,6 +179,8 @@ export function WorkLine({ channel, n, session, work, did, span, may, esc }: { c
   const all = useMemo(() => (blocks ? allStepsOf(blocks, running, limit) : undefined), [blocks, running, limit]);
   const runs = useMemo(() => (all ? foldLine(all) : []), [all]);
   const diff = useMemo(() => diffSum(runs), [runs]);
+  // Its shell commands sent to the background: begun, not done (the work bar has them).
+  const bgShells = useMemo(() => (all ?? []).filter((s) => s.kind === "tool" && bgLaunch(s) === "shell").length, [all]);
   // One step done: the step itself on the line, pressed its card; nothing to fold (kumo, 2026-11-25).
   // Running too: its first step is taken for its only one till a second comes, then its sorts' icons (kumo, 2026-11-25).
   const one = all?.length === 1 && (!work || steps <= 1) ? all[0] : undefined;
@@ -344,6 +346,7 @@ export function WorkLine({ channel, n, session, work, did, span, may, esc }: { c
           </span>
         )}
         {!running && !!work?.agents && <span className="shrink-0 text-xs tabular-nums">{t("work.agents", { n: work.agents })}</span>}
+        {!running && !one && bgShells > 0 && <span className="shrink-0 text-xs tabular-nums">{t("work.bgShell")}{bgShells > 1 && ` ×${bgShells}`}</span>}
         {!running && !!work?.ms && <span className="ml-auto shrink-0 pl-2 text-xs text-ink-4 tabular-nums">{tookWords(work.ms)}</span>}
         {/* How long it has been at it, a second at a time (kumo, 2026-11-25). */}
         {running && !!steps && !!work?.at && <Elapsed since={work.at} />}

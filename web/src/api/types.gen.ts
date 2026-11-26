@@ -327,6 +327,25 @@ export interface Task {
   id: string;
   type?: string; // Claude: local_bash, local_agent...
   description?: string;
+  /**
+   * Since: when it began (ms), where the agent says: the page counts from it, not from when it
+   * first saw the task.
+   */
+  since?: number /* int64 */;
+  /**
+   * Call: the id of the tool call that started it (Claude's), which a subagent's session names
+   * as its Call: the page opens that session's record from it.
+   */
+  call?: string;
+  /**
+   * Steps, Now: a subagent's tool calls so far and what it is at, as its last progress says.
+   */
+  steps?: number /* int */;
+  now?: string;
+  /**
+   * Stop: POST …/tasks/{task}/stop stops it alone (Claude's stop_task).
+   */
+  stop?: boolean;
 }
 /**
  * Context is the carried state "context:<id>": how full the context window is.

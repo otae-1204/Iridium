@@ -71,6 +71,8 @@ func Main() (code int, ok bool) {
 //     FASTSTREAM writes the same pieces without the pauses between the letters (for tests); a
 //     call still takes its time.
 //   - QUOTA is refused for the quota, which comes back in an hour.
+//   - BACKGROUND sends a subagent and a shell command to the background and ends the turn: the
+//     subagent goes on till stop_task stops it, the command ends after bgBash.
 //
 // /compact compacts for three seconds (a compacting status, then the boundary with its figures).
 // /clear (as the whole message, its source prefix aside) clears it as Claude's own does: a
@@ -78,6 +80,14 @@ func Main() (code int, ok bool) {
 // command its first lines.
 // compactFor is how long a /compact takes.
 var compactFor = 3 * time.Second
+
+// bgBash is how long BACKGROUND's shell command runs: IRIDIUM_FAKE_BG_BASH (a duration), else 8s.
+var bgBash = func() time.Duration {
+	if d, err := time.ParseDuration(os.Getenv("IRIDIUM_FAKE_BG_BASH")); err == nil {
+		return d
+	}
+	return 8 * time.Second
+}()
 
 func Claude() int {
 	session := ""
@@ -225,6 +235,27 @@ func Claude() int {
 	var timer <-chan time.Time
 	var compacting map[string]any // a /compact running
 	var compacted <-chan time.Time
+	// BACKGROUND's tasks: a subagent that goes on till stopped (its progress each second), and a
+	// shell command that ends after bgBash.
+	var bg []map[string]any
+	var bgTick <-chan time.Time
+	bgRuns := 0
+	bgSince := map[string]time.Time{} // a subagent's id: when it began
+	bgShells := map[string]time.Time{} // a shell command's id: when it ends
+	tellBg := func() {
+		say(map[string]any{"type": "system", "subtype": "background_tasks_changed", "tasks": bg, "uuid": "bg", "session_id": session})
+	}
+	dropBg := func(id, status string) bool {
+		for i, x := range bg {
+			if x["task_id"] == id {
+				bg = append(bg[:i], bg[i+1:]...)
+				say(map[string]any{"type": "system", "subtype": "task_notification", "task_id": id, "status": status, "summary": "done"})
+				tellBg()
+				return true
+			}
+		}
+		return false
+	}
 	for {
 		var line []byte
 		if len(later) > 0 && waiting == nil && pending == nil && compacting == nil {
@@ -245,6 +276,21 @@ func Claude() int {
 			timer = nil
 			finish(waiting, steered)
 			waiting, steered, holding = nil, nil, false
+			continue
+		case now := <-bgTick:
+			for _, x := range bg {
+				if x["task_type"] == "local_agent" {
+					ms := now.Sub(bgSince[x["task_id"].(string)]).Milliseconds()
+					n := int(ms/1000) + 1
+					say(map[string]any{"type": "system", "subtype": "task_progress", "task_id": x["task_id"], "description": fmt.Sprintf("Reading file %d", n), "usage": map[string]any{"total_tokens": 100 * n, "tool_uses": n, "duration_ms": ms}})
+				}
+			}
+			for id, at := range bgShells {
+				if now.After(at) {
+					delete(bgShells, id)
+					dropBg(id, "completed")
+				}
+			}
 			continue
 		case <-compacted:
 			compacted = nil
@@ -294,6 +340,14 @@ func Claude() int {
 				model, _ = req["model"].(string)
 				answer(id, map[string]any{})
 			case "set_permission_mode":
+				answer(id, map[string]any{})
+			case "stop_task":
+				tid, _ := req["task_id"].(string)
+				if !dropBg(tid, "killed") {
+					say(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "error", "request_id": id, "error": "no task " + tid}})
+					break
+				}
+				delete(bgShells, tid)
 				answer(id, map[string]any{})
 			case "interrupt":
 				answer(id, map[string]any{"still_queued": []any{}})
@@ -491,6 +545,43 @@ func Claude() int {
 				long.WriteString("```ts\nexport function glide(by: number) {\n  const from = at + by;\n  return col.animate([{ transform: `translateY(${from}px)` }, { transform: \"none\" }]);\n}\n```\n\nThat is all of it.")
 				words(long.String())
 				end(f, "success")
+				continue
+			case strings.HasSuffix(text, "BACKGROUND"):
+				// A subagent and a shell command sent to the background, the turn over at once: the
+				// subagent (its record under subagents/, as Claude's) goes on till stopped, the
+				// command ends after bgBash.
+				bgRuns++
+				aid, sid := fmt.Sprintf("a%sbg%d%d", session[:6], bgRuns, time.Now().UnixMilli()%100000), fmt.Sprintf("bbg%d", bgRuns)
+				acall, scall := "toolu_bg_agent_"+session[:8]+aid, "toolu_bg_shell_"+session[:8]+sid
+				agentCall := map[string]any{"type": "tool_use", "id": acall, "name": "Agent", "input": map[string]any{"description": "Scan the dependencies", "prompt": "List what is out of date.", "subagent_type": "general-purpose", "run_in_background": true}}
+				agentDone := map[string]any{"type": "tool_result", "tool_use_id": acall, "content": "Async agent launched successfully.\nagentId: " + aid + " (internal ID - do not mention to user.)"}
+				shellCall := map[string]any{"type": "tool_use", "id": scall, "name": "Bash", "input": map[string]any{"command": "npm run build", "description": "Build the web", "run_in_background": true}}
+				shellDone := map[string]any{"type": "tool_result", "tool_use_id": scall, "content": "Command running in background with ID: " + sid + "."}
+				subs := filepath.Join(dir, session, "subagents")
+				os.MkdirAll(subs, 0o700)
+				os.WriteFile(filepath.Join(subs, "agent-"+aid+".meta.json"), []byte(`{"description":"Scan the dependencies","toolUseId":"`+acall+`"}`), 0o600)
+				sub, _ := json.Marshal(map[string]any{"parentUuid": nil, "isSidechain": true, "type": "user", "message": map[string]any{"role": "user", "content": "List what is out of date."}, "cwd": cwd, "sessionId": session, "agentId": aid, "timestamp": stamp()})
+				os.WriteFile(filepath.Join(subs, "agent-"+aid+".jsonl"), append(sub, '\n'), 0o600)
+				for _, m := range []map[string]any{{"role": "assistant", "content": []any{agentCall}}, {"role": "user", "content": []any{agentDone}}} {
+					say(map[string]any{"type": m["role"], "parent_tool_use_id": nil, "message": m})
+					note(map[string]any{"type": m["role"], "timestamp": stamp(), "message": m})
+				}
+				bg = append(bg, map[string]any{"task_id": aid, "task_type": "local_agent", "subagent_type": "general-purpose", "description": "Scan the dependencies"})
+				tellBg()
+				say(map[string]any{"type": "system", "subtype": "task_started", "task_id": aid, "tool_use_id": acall, "description": "Scan the dependencies", "is_backgrounded": true, "task_type": "local_agent"})
+				for _, m := range []map[string]any{{"role": "assistant", "content": []any{shellCall}}, {"role": "user", "content": []any{shellDone}}} {
+					say(map[string]any{"type": m["role"], "parent_tool_use_id": nil, "message": m})
+					note(map[string]any{"type": m["role"], "timestamp": stamp(), "message": m})
+				}
+				bg = append(bg, map[string]any{"task_id": sid, "task_type": "local_bash", "description": "Build the web"})
+				tellBg()
+				say(map[string]any{"type": "system", "subtype": "task_started", "task_id": sid, "tool_use_id": scall, "description": "Build the web", "is_backgrounded": true, "task_type": "local_bash"})
+				bgShells[sid] = time.Now().Add(bgBash)
+				bgSince[aid] = time.Now()
+				if bgTick == nil {
+					bgTick = time.NewTicker(time.Second).C
+				}
+				finish(f, nil)
 				continue
 			case strings.HasSuffix(text, "PICTURE"):
 				// A Read of a picture: its result carries the picture (TinyPNG), then one more by a

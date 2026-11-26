@@ -34,7 +34,7 @@ import { go } from "../route";
 import { Files, isLink, Picture, previews, SentFile, shownAs } from "./files";
 import { Pictures } from "./pictures";
 import { cmdOfCall, cpOfCall, isShell, newOfCall, type Cmd, type CpSide } from "./cmd";
-import { argOf, diffSum, foldLine, foldSaid, foldSpan, inputOf, kindOf, runCmds, unifiedDiff, type Diff, type Kind, type Shown, type Step, type Tool } from "./fold";
+import { argOf, bgLaunch, diffSum, foldLine, foldSaid, foldSpan, inputOf, kindOf, runCmds, unifiedDiff, type Diff, type Kind, type Shown, type Step, type Tool } from "./fold";
 import { Code } from "./hl";
 import { Markdown, Streamed } from "./markdown";
 import { partialInput } from "./partial";
@@ -729,10 +729,12 @@ export function StepLine({ s, cwd, bare }: { s: Step; cwd?: string; bare?: boole
     );
   const a = argOf(s, cwd);
   const cp = cpOfCall(s);
+  // Sent to the background: done here as it began, what it does goes on (the work bar has it).
+  const bg = bgLaunch(s);
   return (
     <>
       {!bare && <StepIcon s={s} />}
-      {!isShell(s.name) && <span className="shrink-0 text-ink-2">{s.name}</span>}
+      {bg ? <span className="shrink-0 text-ink-2">{t(bg === "agent" ? "work.agentSent" : "work.bgShell")}</span> : !isShell(s.name) && <span className="shrink-0 text-ink-2">{s.name}</span>}
       {cp ? <CpArg from={cp.from} to={cp.to} /> : <span className={cn("min-w-0 truncate", a.code ? "font-mono text-xs" : "text-xs")}>{a.arg}</span>}
       {a.diff && !failed(s) && <DiffStat d={a.diff} />}
       {failed(s) && <CircleX size={13} className="shrink-0 text-err" aria-label={t("msg.failed")} />}

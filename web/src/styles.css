@@ -456,6 +456,62 @@ body {
   background: var(--compact);
   animation: row-breathe 2s ease-in-out infinite;
 }
+/* The work bar's faces (chat/channel/workbar.tsx): in a turn an arc turning round the face; only
+   background work, the whole ring breathing slowly; the number of its tasks at the lower right. Only
+   transform and opacity move. */
+.wb-face {
+  position: relative;
+  display: grid;
+  flex-shrink: 0;
+}
+.wb-face::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.wb-face[data-p="reply"]::before {
+  border: 2px solid transparent;
+  border-top-color: var(--run);
+  border-right-color: var(--run);
+  animation: wb-turn 1.1s linear infinite;
+}
+.wb-face[data-p="back"]::before {
+  box-shadow: inset 0 0 0 1.5px var(--run);
+  animation: wb-breathe 2.8s ease-in-out infinite;
+}
+.wb-badge {
+  position: absolute;
+  right: -6px;
+  bottom: -5px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3.5px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 1.5px var(--glass-solid);
+}
+@keyframes wb-turn {
+  to {
+    transform: rotate(1turn);
+  }
+}
+@keyframes wb-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
 @keyframes row-breathe {
   0%,
   100% {

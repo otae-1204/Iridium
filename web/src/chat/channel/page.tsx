@@ -55,6 +55,7 @@ import { AgentFace } from "./members";
 import { PersonCard, PersonMenu, useNamed } from "./person";
 import { NickLink, Nicks, NickWords } from "./nick";
 import { useRecalled } from "../reactions";
+import { WorkBar } from "./workbar";
 
 // At work: in a turn. Not "starting" (its harness coming up, no turn yet: an invited agent's face
 // flashed up as if to speak and went; kumo, 2026-11-16).
@@ -459,6 +460,7 @@ export function ChannelPage({ id, sheet = 0, bar, record }: { id: string; sheet?
           </div>
         </Stick>
         {bar(s)}
+        {!hold && <WorkBar agents={agents} stateAt={stateAt} msgs={log.msgs} jump={jump} record={record} may={may} solo={!!solo} />}
         <div ref={stack} {...{ [PULL]: "" }} data-asking={asking || undefined} data-covered={sheet > 0 || undefined} data-sunk={(sheet > 0 && stackH > sheet - 16) || undefined} inert={sheet > 0} className="g-turn-stay g-sink vt-stack absolute inset-x-0 bottom-0 z-10 px-2.5 pb-[max(14px,calc(env(safe-area-inset-bottom)+6px))] sm:px-5">
           <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[calc(44px+max(14px,calc(env(safe-area-inset-bottom)+6px)))] bg-[linear-gradient(to_bottom,transparent,var(--paper)_14px)]" />
           <div className="relative mx-auto max-w-(--chat-w)">

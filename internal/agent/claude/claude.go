@@ -7,6 +7,7 @@
 package claude
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -59,6 +60,9 @@ type Driver struct {
 	state   agent.State
 	asks    []api.Ask
 	tasks   []api.Task
+	// told: what task_started and task_progress said of a task, by its id, till it ends: when it
+	// began, the call that started it, its steps.
+	told    map[string]*api.Task
 	agents  bool   // a background task other than a shell runs: the CLI holds back idle (#226)
 	reply   string // the turn's last assistant message so far
 	sent    string // since the last turn ended: "", "compact" (only /compact), "other"
@@ -178,7 +182,7 @@ func (d *Driver) reset() {
 	}
 	d.helloID = ""
 	d.state = agent.Idle
-	d.asks, d.tasks, d.agents = nil, nil, false
+	d.asks, d.tasks, d.agents, d.told = nil, nil, false, nil
 	d.reply, d.sent, d.waiting, d.resulted = "", "", nil, false
 	d.model, d.session, d.context = "", "", 0
 	d.caps = map[string]bool{}
@@ -515,7 +519,7 @@ func (d *Driver) feed(line []byte, replay bool) []byte {
 			d.emitLocked(agent.AskCancel{RequestID: f.RequestID})
 		}
 	case "system":
-		d.system(&f)
+		d.system(&f, line)
 	case "conversation_reset":
 		// Its /clear: the init after it names the new id (Cleared).
 	case "stream_event":
@@ -662,7 +666,7 @@ func (d *Driver) hello(r ctlResponse) {
 	d.emitLocked(agent.PendingAsks{Asks: slices.Clone(d.asks), Known: known})
 }
 
-func (d *Driver) system(f *frame) {
+func (d *Driver) system(f *frame, line []byte) {
 	switch f.Subtype {
 	case "init":
 		// Each turn begins with one. Past a turn that ended on its result, the next one the CLI
@@ -722,14 +726,93 @@ func (d *Driver) system(f *frame) {
 	case "background_tasks_changed":
 		d.tasks, d.agents = nil, false
 		for _, t := range f.Tasks {
-			d.tasks = append(d.tasks, api.Task{ID: t.TaskID, Type: t.TaskType, Description: t.Description})
+			d.tasks = append(d.tasks, d.withTold(api.Task{ID: t.TaskID, Type: t.TaskType, Description: t.Description}))
 			d.agents = d.agents || t.TaskType != "local_bash"
 		}
 		d.emitLocked(agent.Tasks{Tasks: slices.Clone(d.tasks)})
-	case "hook_started", "hook_response", "task_started", "task_updated", "task_progress", "task_notification", "thinking_tokens":
+	case "task_started", "task_progress", "task_notification":
+		d.taskTold(f.Subtype, line)
+	case "hook_started", "hook_response", "task_updated", "thinking_tokens":
 	default:
 		d.note("system/" + f.Subtype)
 	}
+}
+
+// taskTold keeps what a task's frame says of it (when it began, the call that started it, its
+// steps), for the background tasks to carry; one listed now is told again.
+func (d *Driver) taskTold(subtype string, line []byte) {
+	var t struct {
+		TaskID    string `json:"task_id"`
+		ToolUseID string `json:"tool_use_id"`
+		Usage     *struct {
+			ToolUses   int   `json:"tool_uses"`
+			DurationMs int64 `json:"duration_ms"`
+		} `json:"usage"`
+		Description string `json:"description"`
+		Summary     string `json:"summary"`
+	}
+	if json.Unmarshal(line, &t) != nil || t.TaskID == "" {
+		return
+	}
+	if subtype == "task_notification" {
+		delete(d.told, t.TaskID) // it ended; a resumed one starts again
+		return
+	}
+	if d.told == nil {
+		d.told = map[string]*api.Task{}
+	}
+	k := d.told[t.TaskID]
+	if k == nil {
+		k = &api.Task{Since: time.Now().UnixMilli()}
+		d.told[t.TaskID] = k
+	}
+	if t.ToolUseID != "" {
+		k.Call = t.ToolUseID
+	}
+	if u := t.Usage; u != nil {
+		k.Steps = u.ToolUses
+		if u.DurationMs > 0 {
+			// From how long it has run: right after a daemon's restart too, its lines replayed late.
+			k.Since = time.Now().UnixMilli() - u.DurationMs
+		}
+	}
+	if subtype == "task_progress" {
+		k.Now = cmp.Or(t.Summary, t.Description)
+	}
+	i := slices.IndexFunc(d.tasks, func(x api.Task) bool { return x.ID == t.TaskID })
+	if i < 0 {
+		return
+	}
+	if was := d.tasks[i]; d.withTold(was) != was {
+		d.tasks[i] = d.withTold(was)
+		d.emitLocked(agent.Tasks{Tasks: slices.Clone(d.tasks)})
+	}
+}
+
+// withTold is t with what its frames said of it; one never told of began now.
+func (d *Driver) withTold(t api.Task) api.Task {
+	if d.told == nil {
+		d.told = map[string]*api.Task{}
+	}
+	k := d.told[t.ID]
+	if k == nil {
+		k = &api.Task{Since: time.Now().UnixMilli()}
+		d.told[t.ID] = k
+	}
+	t.Since, t.Call, t.Steps, t.Now, t.Stop = k.Since, k.Call, k.Steps, k.Now, true
+	return t
+}
+
+// StopTask stops one background task (stop_task); the turn and the others go on.
+func (d *Driver) StopTask(ctx context.Context, id string) error {
+	d.mu.Lock()
+	known := slices.ContainsFunc(d.tasks, func(t api.Task) bool { return t.ID == id })
+	d.mu.Unlock()
+	if !known {
+		return fmt.Errorf("claude: no background task %s", id)
+	}
+	_, err := d.request(ctx, "stop_task", map[string]any{"task_id": id}, true)
+	return err
 }
 
 func (d *Driver) assistant(f *frame) {

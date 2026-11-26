@@ -151,6 +151,11 @@ type Driver interface {
 	State() State
 }
 
+// TaskStopper is a driver that stops one background task alone (api.Task.Stop).
+type TaskStopper interface {
+	StopTask(ctx context.Context, id string) error
+}
+
 // Balancer is a driver whose account has money rather than quota windows (dsh: the DeepSeek
 // account's balance).
 type Balancer interface {

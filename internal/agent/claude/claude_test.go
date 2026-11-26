@@ -446,6 +446,22 @@ func TestBackgroundAgent(t *testing.T) {
 	if len(tasks) == 0 || tasks[0].Tasks[0].Type != "local_agent" {
 		t.Errorf("tasks: %+v", tasks)
 	}
+	// What its task_started and task_progress said: the call that started it (the subagent's
+	// session names it), its steps, what it is at; stoppable alone.
+	var told *api.Task
+	for _, e := range tasks {
+		for _, x := range e.Tasks {
+			if x.ID == "afaae5c6f94ee4039" {
+				told = &x
+			}
+		}
+	}
+	if told == nil || told.Call != "toolu_000024746097623747210112" || told.Steps != 2 || told.Now != "Running Sleep 30 seconds in background" || !told.Stop || told.Since == 0 {
+		t.Errorf("the subagent's task as told: %+v", told)
+	}
+	if last := tasks[len(tasks)-1].Tasks; len(last) != 0 {
+		t.Errorf("tasks at the end: %+v", last)
+	}
 	if h.d.State() != agent.Idle {
 		t.Errorf("state %s", h.d.State())
 	}
@@ -726,5 +742,33 @@ func TestClearedInProcess(t *testing.T) {
 	h.d.Feed(init(next, ""), false)
 	if c := find[agent.Cleared](h); len(c) != 1 {
 		t.Errorf("cleared again by the same id: %+v", c)
+	}
+}
+
+// A background task is stopped alone: stop_task with its id; one not listed is refused unasked.
+func TestStopTask(t *testing.T) {
+	writes := make(chan []byte, 8)
+	d := New(Options{IDPrefix: "ir-test-", Logf: t.Logf})
+	d.Attach(func(l []byte) error { writes <- slices.Clone(l); return nil }, 1)
+	<-writes // initialize
+	d.Feed([]byte(`{"type":"system","subtype":"background_tasks_changed","tasks":[{"task_id":"b1","task_type":"local_bash","description":"watch"}]}`), false)
+	if err := d.StopTask(context.Background(), "nope"); err == nil {
+		t.Error("a task not listed was stopped")
+	}
+	done := make(chan error, 1)
+	go func() { done <- d.StopTask(context.Background(), "b1") }()
+	var req struct {
+		RequestID string `json:"request_id"`
+		Request   struct {
+			Subtype string `json:"subtype"`
+			TaskID  string `json:"task_id"`
+		} `json:"request"`
+	}
+	if err := json.Unmarshal(<-writes, &req); err != nil || req.Request.Subtype != "stop_task" || req.Request.TaskID != "b1" {
+		t.Fatalf("wrote %+v (%v)", req, err)
+	}
+	d.Feed([]byte(`{"type":"control_response","response":{"subtype":"success","request_id":"`+req.RequestID+`","response":{}}}`), false)
+	if err := <-done; err != nil {
+		t.Fatal(err)
 	}
 }

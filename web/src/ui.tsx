@@ -14,6 +14,11 @@ import { AGY_DATA_URI, CLAUDE, DSH, DSH_VIEWBOX, OPENAI, OPENAI_VIEWBOX, PI, PI_
 
 export const cn = (...xs: (string | false | null | undefined)[]) => xs.filter(Boolean).join(" ");
 
+/** The shell of what floats over a chat's foot and top: the composer, the work bar. SHELL_LINE: as
+ *  tall as the composer with one line in it (its keys and their padding). */
+export const SHELL = "glass float rounded-[20px]";
+export const SHELL_LINE = "min-h-12 pointer-coarse:min-h-14";
+
 export const params = new URLSearchParams(location.search);
 
 export function useMedia(q: string) {

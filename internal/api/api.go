@@ -244,6 +244,17 @@ type Task struct {
 	ID          string `json:"id"`
 	Type        string `json:"type,omitempty"` // Claude: local_bash, local_agent...
 	Description string `json:"description,omitempty"`
+	// Since: when it began (ms), where the agent says: the page counts from it, not from when it
+	// first saw the task.
+	Since int64 `json:"since,omitempty"`
+	// Call: the id of the tool call that started it (Claude's), which a subagent's session names
+	// as its Call: the page opens that session's record from it.
+	Call string `json:"call,omitempty"`
+	// Steps, Now: a subagent's tool calls so far and what it is at, as its last progress says.
+	Steps int    `json:"steps,omitempty"`
+	Now   string `json:"now,omitempty"`
+	// Stop: POST …/tasks/{task}/stop stops it alone (Claude's stop_task).
+	Stop bool `json:"stop,omitempty"`
 }
 
 // Context is the carried state "context:<id>": how full the context window is.

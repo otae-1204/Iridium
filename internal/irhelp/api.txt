@@ -64,6 +64,7 @@ PUT internal/secrets/{name} {note?, value?, scope?, workspaces?, always?} -> Sec
 GET internal/sessions/{id} - -> SessionState  live state; --wait: wait for the turn to end, print its reply  view=id,status,model,mode,error,asks,queue,end
   --wait: holds your turn until its turn ends, then prints its last reply; exit 2 when it waits for a person (asks: its questions; POST internal/button answers one). For a session doing a job apart from your channel. Not for an agent in your channel (one you invited or started there): its words are said in the channel and its answer to you calls you, so waiting only holds your turn and gets you words everyone has already seen.
 POST internal/sessions/{id}/interrupt - -> {ok}  end the current turn (Esc); what waits in the queue pauses, and goes ahead of the next message
+POST internal/sessions/{id}/tasks/{task}/stop - -> {ok}  stop one background task alone (tasks[].stop: Claude's); the turn and the other tasks go on
 POST internal/sessions/{id}/stop - -> {ok}  stop the agent process; the next message restarts it
 POST internal/button {id, option?, choices?, words?, message?} -> {}  answer an ask: id its card (asks[].card.id); or press a button (<card>#<option>; one attached: att:<session>:<from>:<id>, SessionState.attached)
 POST internal/files/copy {from, to} -> ndjson  copy a file: from, to are paths here or app:path at an app's computer; prints path, size, sha256; run again to resume; socket only

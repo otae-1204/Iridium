@@ -241,6 +241,7 @@ func (s *Server) Handler(local bool) http.Handler {
 	mux.HandleFunc("GET /v1/internal/sessions/{id}/first", s.first)
 	mux.HandleFunc("GET /v1/internal/sessions/{id}/image", s.image)
 	mux.HandleFunc("POST /v1/internal/sessions/{id}/interrupt", s.use(s.interrupt))
+	mux.HandleFunc("POST /v1/internal/sessions/{id}/tasks/{task}/stop", s.use(s.stopTask))
 	mux.HandleFunc("POST /v1/internal/sessions/{id}/stop", s.use(s.stop))
 	mux.HandleFunc("POST /v1/internal/sessions/{id}/manual", s.use(s.askManual)) // manual.go
 	mux.HandleFunc("GET /v1/internal/sessions/{id}/manual", s.use(s.manualState))
@@ -623,6 +624,20 @@ func (s *Server) interrupt(w http.ResponseWriter, r *http.Request) {
 	}
 	s.logf("server: %s: interrupt asked by %s", id, who)
 	s.done(w, s.m.Interrupt(ctx, id))
+}
+
+// stopTask stops one background task of a session's agent (api.Task.Stop).
+func (s *Server) stopTask(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	id := r.PathValue("id")
+	s.logf("server: %s: task %s stop asked", id, r.PathValue("task"))
+	err := s.m.StopTask(ctx, id, r.PathValue("task"))
+	if errors.Is(err, session.ErrBadRequest) {
+		fail(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	s.done(w, err)
 }
 
 func (s *Server) stop(w http.ResponseWriter, r *http.Request) {

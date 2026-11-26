@@ -187,7 +187,7 @@ type Driver struct {
 	run       agent.Tokens // the turn's tokens so far
 	usage     *tokenUsage  // the thread's last thread/tokenUsage/updated
 	limits    map[string]map[string]any
-	subagents map[string]string // at work, by thread id: their paths
+	subagents map[string]api.Task // at work, by thread id
 	// compact: a /compact went out; the next turn is its own. compactTurn: that turn's id.
 	compact     bool
 	compactTurn string
@@ -443,7 +443,7 @@ func (d *Driver) reset() {
 	d.startedBy = map[string]string{}
 	d.tools = map[string]tool{}
 	d.limits = map[string]map[string]any{}
-	d.subagents = map[string]string{}
+	d.subagents = map[string]api.Task{}
 	d.state = agent.Idle
 }
 
@@ -1319,7 +1319,7 @@ func (d *Driver) subAgent(it item) {
 		if _, ok := d.subagents[it.AgentID]; ok {
 			return
 		}
-		d.subagents[it.AgentID] = cmpOr(it.AgentPath, it.AgentID)
+		d.subagents[it.AgentID] = api.Task{ID: it.AgentID, Type: "subagent", Description: cmpOr(it.AgentPath, it.AgentID), Since: time.Now().UnixMilli()}
 	case "completed", "interrupted":
 		if _, ok := d.subagents[it.AgentID]; !ok {
 			return
@@ -1329,8 +1329,8 @@ func (d *Driver) subAgent(it item) {
 		return
 	}
 	tasks := []api.Task{}
-	for id, path := range d.subagents {
-		tasks = append(tasks, api.Task{ID: id, Type: "subagent", Description: path})
+	for _, t := range d.subagents {
+		tasks = append(tasks, t)
 	}
 	slices.SortFunc(tasks, func(a, b api.Task) int { return strings.Compare(a.ID, b.ID) })
 	d.emitLocked(agent.Tasks{Tasks: tasks})

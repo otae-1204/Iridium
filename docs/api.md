@@ -21,6 +21,7 @@ Iridium 自己的接口都在 `/v1/internal/` 下：Satori 规范的 internal �
 | `GET /v1/internal/sessions/{id}/first[?record=0&since=<ms>]` | → `{session, page?, members?, reads?, log?, sessions?, work?}` | 会话页的首屏，一次给齐：状态、记录最新一页（`block.list`）、成员；频道里还有别的 agent 时再加已读、频道日志（`message.list`，往前补到记录这一页的开头）、其他 agent 的状态、它们每条话底下的工作（`work`：所在记录的位置和那里的块）。每一部分就是对应接口以调用者身份的回答，取不到的不给，网页照旧单独去取。`record=0`：网页已有记录，不给 `page`，`since` 是日志要补到的时间（0：全部） |
 | `GET /v1/internal/sessions/{id}/image?at=<at>&n=<n>` | → 图片 | 工具结果（`Result.images`，`at` 是结果的）给模型的第 `n` 张图，取自 agent 的记录，不读文件现在的样子：Claude、pi 和 MCP 工具的在结果里，Codex 的 view_image 在脚本的输出里（脚本只看了一张、只交出一张，当时没有别的调用、也没有后台还在跑的脚本时，才认得出是哪张；认不出的不列进 `images`），dsh 的 read_image 在它的附件库（经通道，远端经执行端）。只给 PNG、JPEG、GIF、WebP，按内容的 ETag。没有这张 422 `no_such_image`，不在了 410，所在机器没连上 409，脚本还没跑完 425（稍后再问） |
 | `POST /v1/internal/sessions/{id}/interrupt` | → `{ok}` | 停掉当前回合（Esc），agent 留着。队列暂停 |
+| `POST /v1/internal/sessions/{id}/tasks/{task}/stop` | → `{ok}` | 停掉一个后台任务（`tasks[].stop` 为真的才行，Claude 的 `stop_task`），回合和别的任务照常 |
 | `POST /v1/internal/sessions/{id}/stop` | → `{ok}` | 停掉 agent 进程（关 stdin，写完记录自己退出）。会话还在，下一条消息再拉起。队列暂停 |
 | `POST /v1/internal/sessions/{id}/manual` | `ManualAsk{reason, minutes?}` → `ManualState` | Claude 的 auto 模式拦下它要的一步时，请人临时切换至手动审批（见“临时切换至 manual”）；只有会话自己的 agent（`self`）能问，别人 403 |
 | `GET /v1/internal/sessions/{id}/manual?wait=` | — → `ManualState` | 最近一次的结果：`pending`、`approved`、`refused`、`expired`；`wait` 最多等 60 秒 |

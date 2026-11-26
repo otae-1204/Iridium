@@ -1154,7 +1154,7 @@ func (d *Driver) notification(f *frame) {
 	case "subagent.started":
 		if p.ParentSessionID == d.session || d.children[p.ParentSessionID] {
 			d.children[p.ChildSessionID] = true
-			d.subagents = append(d.subagents, api.Task{ID: p.ChildSessionID, Type: "subagent"})
+			d.subagents = append(d.subagents, api.Task{ID: p.ChildSessionID, Type: "subagent", Since: time.Now().UnixMilli()})
 			d.tellTasks()
 		}
 	case "subagent.finished":
@@ -1313,6 +1313,7 @@ func (d *Driver) event(e *event) {
 			Owner    string `json:"owner"`
 			Kind     string `json:"kind"`
 			Label    string `json:"label"`
+			Started  int64  `json:"startedAt"`
 			ToolCall struct {
 				CallID string `json:"callId"`
 			} `json:"toolCall"`
@@ -1320,7 +1321,7 @@ func (d *Driver) event(e *event) {
 		_ = json.Unmarshal(e.Data, &v)
 		if e.Type == "job/registered" {
 			if v.Owner == "" || v.Owner == d.session {
-				d.jobs[v.JobID] = &job{task: api.Task{ID: v.JobID, Type: v.Kind, Description: v.Label}, call: v.ToolCall.CallID}
+				d.jobs[v.JobID] = &job{task: api.Task{ID: v.JobID, Type: v.Kind, Description: v.Label, Since: cmp.Or(v.Started, time.Now().UnixMilli())}, call: v.ToolCall.CallID}
 			}
 		} else if j, ok := d.jobs[v.JobID]; ok {
 			delete(d.jobs, v.JobID)

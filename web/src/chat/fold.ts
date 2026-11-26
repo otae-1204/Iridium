@@ -2,7 +2,7 @@
 // said fold into one line; the calls still running at the end show on their own. Pure, for tests.
 import type { Block } from "../api/types.gen";
 import { t } from "../i18n";
-import { cmdOfCall, cpOfCall, opensSession, renameOnly, type Cmd, type CpSide } from "./cmd";
+import { cmdOfCall, cpOfCall, isShell, opensSession, renameOnly, type Cmd, type CpSide } from "./cmd";
 
 export type Tool = Block & { kind: "tool" };
 export type Step = Block & { kind: "tool" | "thinking" };
@@ -200,6 +200,17 @@ export function diffOf(t: { name?: string; input?: string }): Diff | undefined {
 
 /** What a call is about, on one line: its file, command, pattern, address or what it is told; code:
  *  shown in monospace. diff: an edit's lines added and taken. */
+/** A call that sent work to the background and came back at once (Claude's run_in_background):
+ *  a subagent's, a shell command's (Monitor's always); none for another. */
+export function bgLaunch(t: { name?: string; input?: string }): "agent" | "shell" | undefined {
+  const name = (t.name ?? "").toLowerCase();
+  if (name === "monitor") return "shell";
+  if (inputOf(t.input).run_in_background !== true) return undefined;
+  if (name === "agent" || name === "task") return "agent";
+  if (isShell(name)) return "shell";
+  return undefined;
+}
+
 export function argOf(t: { name?: string; input?: string }, cwd?: string): { arg: string; code: boolean; diff?: Diff } {
   const i = inputOf(t.input);
   const str = (...ks: string[]) => ks.map((k) => i[k]).find((v): v is string => typeof v === "string" && v !== "");

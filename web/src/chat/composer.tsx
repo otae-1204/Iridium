@@ -26,7 +26,7 @@ import { errText, toast } from "../toast";
 import { stopTurn } from "./live";
 import { useList } from "../store";
 import { useHome, useMachines, useWorkspaces } from "../data";
-import { ago, agentName, cn, fine, IconKey, keep, kept, OwnPopup, tilde, Tip, titleOf, useMinute } from "../ui";
+import { ago, agentName, cn, fine, IconKey, keep, kept, OwnPopup, SHELL, SHELL_LINE, tilde, Tip, titleOf, useMinute } from "../ui";
 import { MentionMarks, mentionOf, PlaceIcon, SessionFace } from "./mention";
 import { atWord } from "./refs";
 import { boxAt, boxed, edited, outOf, wordsAt } from "./boxed";
@@ -487,7 +487,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ s,
           }}
         />
       )}
-    <div className="glass float rest relative @container rounded-[20px]">
+    <div className={cn(SHELL, SHELL_LINE, "rest relative @container")}>
       {/* The message answered: its row opens and shuts as the attachments' does, no × (docs/
           前端设计规范.md): Esc, a Backspace in an empty box, or a press on it put it away. */}
       <div aria-hidden={!quote || undefined} className={cn("g-reveal", snap && "g-snap")} data-open={quote ? "" : undefined}>

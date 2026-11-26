@@ -367,6 +367,8 @@ export const api = {
   },
   interrupt: (id: string) => write<{ ok: boolean }>("POST", `${S(id)}/interrupt`),
   stop: (id: string) => write<{ ok: boolean }>("POST", `${S(id)}/stop`),
+  /** Stops one background task of the session's agent alone (Task.stop). */
+  stopTask: (id: string, task: string) => write<{ ok: boolean }>("POST", `${S(id)}/tasks/${enc(task)}/stop`),
   /** The session's public read-only link (docs/api.md "公开链接"): its state; made anew (its URL only
    *  in this answer); revoked. */
   publicLink: (id: string) => get<PublicLink>(`${S(id)}/public`),

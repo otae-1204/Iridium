@@ -447,6 +447,26 @@ func (m *Manager) source(from string) (terminal, tag, login, device string) {
 	return from, m.tagOf(from), "", ""
 }
 
+// StopTask stops one background task of the session's agent (api.Task.Stop); its turn and its
+// other tasks go on.
+func (m *Manager) StopTask(ctx context.Context, id, task string) error {
+	h, err := m.get(id)
+	if err != nil {
+		return err
+	}
+	h.mu.Lock()
+	live := h.live
+	h.mu.Unlock()
+	if !live {
+		return ErrNotLive
+	}
+	st, ok := h.drv.(agent.TaskStopper)
+	if !ok {
+		return fmt.Errorf("%w: its agent stops no task alone", ErrBadRequest)
+	}
+	return st.StopTask(ctx, task)
+}
+
 // Interrupt stops the running turn; the agent stays.
 func (m *Manager) Interrupt(ctx context.Context, id string) error {
 	h, err := m.get(id)
