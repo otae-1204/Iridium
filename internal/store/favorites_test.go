@@ -38,4 +38,15 @@ func TestFavorites(t *testing.T) {
 	if c, _ := s.FavoritesColor("web/a"); c != "" {
 		t.Fatalf("a's colour taken off: %q", c)
 	}
+	must(t, s.SetFavoritesName("web/a", "常用"))
+	if n, _ := s.FavoritesName("web/a"); n != "常用" {
+		t.Fatalf("a's name: %q", n)
+	}
+	if n, _ := s.FavoritesName("web/b"); n != "" {
+		t.Fatalf("b's name: %q", n)
+	}
+	must(t, s.SetFavoritesName("web/a", ""))
+	if n, _ := s.FavoritesName("web/a"); n != "" {
+		t.Fatalf("a's name taken off: %q", n)
+	}
 }

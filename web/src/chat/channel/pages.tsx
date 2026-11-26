@@ -70,8 +70,8 @@ export function Paged({ children }: { children: ReactNode }) {
 }
 
 /** The page id of a Paged menu, drawn while it is in the stack (or going back out): ‹ title at its
- *  head, back. Its key is the caller's: a row (Deeper), or a key of its own (the members' +). */
-export function PageOf({ pages, id, title, children }: { pages: Pages; id: string; title: string; children: ReactNode }) {
+ *  head, back (bare: none). Its key is the caller's: a row (Deeper), or a key of its own (the members' +). */
+export function PageOf({ pages, id, title, bare, children }: { pages: Pages; id: string; title: string; bare?: boolean; children: ReactNode }) {
   const at = pages.stack.findIndex((p) => p.id === id);
   // Not in the stack: no page drawn (with none open, at -1 is no top: every row's page was drawn
   // at once, kumo 2026-11-25).
@@ -79,10 +79,13 @@ export function PageOf({ pages, id, title, children }: { pages: Pages; id: strin
   if (!place || !pages.slot) return null;
   return createPortal(
     <Layer place={place}>
-      <Menu.Item closeOnClick={false} onClick={pages.pop} className={cn(ITEM, "text-ink-2")}>
-        <ChevronLeft size={15} />
-        <span className="min-w-0 flex-1 truncate">{title}</span>
-      </Menu.Item>
+      {/* bare: no 返回 at its head, a page with no way back (邀请 from the members' +, kumo 2026-11-26). */}
+      {!bare && (
+        <Menu.Item closeOnClick={false} onClick={pages.pop} className={cn(ITEM, "text-ink-2")}>
+          <ChevronLeft size={15} />
+          <span className="min-w-0 flex-1 truncate">{title}</span>
+        </Menu.Item>
+      )}
       {children}
     </Layer>,
     pages.slot,

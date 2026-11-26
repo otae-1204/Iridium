@@ -9,7 +9,7 @@
 // (colors.ts); a group's: rename, its path. The mouse resting
 // on a row fetches its chat ahead.
 import { Menu } from "@base-ui/react/menu";
-import { Archive, ArchiveRestore, Bookmark, BookmarkMinus, Bot, Check, ChevronRight, Copy, Ellipsis, Ungroup, Folder, FolderOpen, ListCollapse, Moon, Pencil, Pin, PinOff, Plus, RefreshCw, Square, FolderPlus } from "lucide-react";
+import { Archive, ArchiveRestore, Bookmark, BookmarkMinus, BookmarkX, Bot, Check, ChevronRight, Copy, Ellipsis, Ungroup, Folder, FolderOpen, ListCollapse, Moon, Pencil, Pin, PinOff, Plus, RefreshCw, Square, FolderPlus } from "lucide-react";
 import { ConfirmIcon, confirmName, confirmTitle } from "./confirmname";
 import { Fragment, lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode, type RefObject } from "react";
 import { api } from "./api/client";
@@ -29,7 +29,7 @@ import { manages, useMachines, useMe, useSaidLine, useUpdate } from "./data";
 import { agentName, ago, cn, fine, IconKey, IrMark, keep, kept, Lamp, lampOf, Logo, own, sessionStatusText, statusText, tilde, Tip, titleOf, useEver, untitled, useLongPress, useMenuAt, useMinute, usePointAnchor, MenuPortal } from "./ui";
 import { AppName } from "./appkey";
 import { MAKING, patchSessions } from "./pending";
-import { isFavorite, placeFavorite, setFavorite, setFavoritesColor, useFavorites, useFavoritesColor } from "./favorites";
+import { clearFavorites, isFavorite, placeFavorite, setFavorite, setFavoritesColor, setFavoritesName, useFavorites, useFavoritesColor, useFavoritesName } from "./favorites";
 import { PLACE_DRAG, SESSION_DRAG } from "./chat/refs";
 import { badge, isQuiet, setQuiet, useAt, useQuiet, useUnread } from "./unread";
 import { Face, FaceStack } from "./chat/channel/face";
@@ -78,6 +78,9 @@ type Props = {
   noFoot?: boolean;
   /** On a phone: the sheet brought out, a place shown in it (openPlace). */
   reveal?: () => void;
+  /** On a computer, folded away to the left (sideshut.ts); onShut: its [Ir] pressed. */
+  shut?: boolean;
+  onShut?: () => void;
 };
 
 /** How wide the sidebar may be dragged, and at first: freely, to 640px or 60% of the window (the
@@ -147,7 +150,20 @@ export function Sidebar(p: Props) {
   saidNow = useSaidLine();
   const list = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(() => clampWidth(Number(kept(WIDTH_KEY)) || WIDTH.start));
-  useLayoutEffect(() => void document.documentElement.style.setProperty("--sidebar-w", `${p.phone ? 0 : width}px`), [width, p.phone]);
+  useLayoutEffect(() => void document.documentElement.style.setProperty("--sidebar-w", `${p.phone || p.shut ? 0 : width}px`), [width, p.phone, p.shut]);
+  // Shut or opened: its box's width slides, the list inside keeping its own width (no rewrapping
+  // as it goes); only then, not as it is dragged.
+  const [wasShut, setWasShut] = useState(p.shut);
+  const [sliding, setSliding] = useState(false);
+  if (wasShut !== p.shut) {
+    setWasShut(p.shut);
+    setSliding(true);
+  }
+  useEffect(() => {
+    if (!sliding) return;
+    const t = setTimeout(() => setSliding(false), 1000);
+    return () => clearTimeout(t);
+  }, [sliding]);
   const [plusOpen, setPlusOpen] = useState<string | null>(null);
   // A confirmation an agent's ir asked for lights its session's lamp; one of no session listed
   // here is a row of its own at the top (no 需要你 group: the user, 2026-11-08). The sessions a
@@ -440,7 +456,7 @@ export function Sidebar(p: Props) {
       {/* The name at the left, the keys at the right (the user, 2026-11-06); no switch of machines
           (the user, 2026-11-10: a group at another is listed as a session is opened there). */}
       <div className="flex min-w-0 flex-1 items-center gap-2 pl-2">
-        <IrMark size={18} className="text-ink" />
+        {p.onShut ? <SideKey label={t("nav.shut")} onClick={p.onShut} /> : <IrMark size={18} className="text-ink" />}
         {/* In the app, the name this Iridium goes by there, pressed to change (appkey.tsx). */}
         <AppName />
         {/* The link's dot and latency, by the name (the user, 2026-11-08). */}
@@ -450,7 +466,7 @@ export function Sidebar(p: Props) {
     </div>
   );
 
-  return (
+  const aside = (
     <aside className={cn("relative flex h-full flex-col select-none [-webkit-touch-callout:none]", p.phone ? "w-full" : "shrink-0")} style={p.phone ? undefined : { width }}>
       {!p.phone && <Divider width={width} setWidth={setWidth} />}
       {head}
@@ -527,6 +543,28 @@ export function Sidebar(p: Props) {
       </div>
       {!p.noFoot && <Foot me={p.me} />}
     </aside>
+  );
+  if (p.phone) return aside;
+  return (
+    <div
+      inert={p.shut || undefined}
+      onTransitionEnd={(e) => e.target === e.currentTarget && setSliding(false)}
+      className={cn("relative h-full shrink-0", (p.shut || sliding) && "overflow-hidden", sliding && "transition-[width] duration-(--move) ease-(--ease-out)")}
+      style={{ width: p.shut ? 0 : width }}
+    >
+      {aside}
+    </div>
+  );
+}
+
+/** [Ir], pressed to shut the sidebar (its head) or open it again (the main pane's top bar). */
+export function SideKey({ label, onClick, className }: { label: string; onClick?: () => void; className?: string }) {
+  return (
+    <Tip label={label} side="bottom">
+      <button type="button" aria-label={label} onClick={onClick} className={cn("g-press -m-2 grid shrink-0 place-items-center rounded-md p-2 hover:bg-fill", className)}>
+        <IrMark size={18} className="text-ink" />
+      </button>
+    </Tip>
   );
 }
 
@@ -865,6 +903,9 @@ function WsMark({ open, remote, color }: { open: boolean; remote: boolean; color
  *  bookmark tinted as a folder is. */
 function FavHead({ open, onToggle, first }: { open: boolean; onToggle: () => void; first: string }) {
   const color = useFavoritesColor();
+  // Its name, mine alone (kumo, 2026-11-26): 改名 in its menu, in place; none given: 收藏.
+  const name = useFavoritesName() ?? t("nav.favorites");
+  const [renaming, setRenaming] = useState(false);
   const [at, setAt] = useMenuAt();
   const lp = useLongPress((p) => setAt({ x: p.x, y: p.y }));
   const anchor = usePointAnchor(at);
@@ -875,7 +916,7 @@ function FavHead({ open, onToggle, first }: { open: boolean; onToggle: () => voi
         flip="fav"
         head
         expanded={open}
-        onClick={onToggle}
+        onClick={() => !renaming && onToggle()}
         icon={
           <span
             aria-hidden
@@ -885,7 +926,7 @@ function FavHead({ open, onToggle, first }: { open: boolean; onToggle: () => voi
             <Bookmark size={15} />
           </span>
         }
-        label={t("nav.favorites")}
+        label={renaming ? <FavRename name={name} done={() => setRenaming(false)} /> : name}
         extra={{
           ...lp,
           onContextMenu: (e: React.MouseEvent) => !lp.onContextMenu(e) && own(e) && (e.preventDefault(), setAt({ x: e.clientX, y: e.clientY })),
@@ -896,11 +937,49 @@ function FavHead({ open, onToggle, first }: { open: boolean; onToggle: () => voi
       <Menu.Root open={at !== null} onOpenChange={(o) => !o && setAt(null)}>
         <MenuPortal>
           <Menu.Positioner anchor={anchor} side="bottom" align="start" sideOffset={4} collisionPadding={8} className="z-50">
-            <MenuItems items={[]} tags={{ value: color, set: setFavoritesColor }} />
+            <MenuItems
+              items={[
+                { icon: <Pencil size={15} />, label: t("menu.rename"), run: () => setRenaming(true) },
+                // Asked again in place (docs/前端设计规范.md "确认在原处").
+                { icon: <BookmarkX size={15} />, label: t("menu.unfavoriteAll"), sure: t("menu.unfavoriteAllSure"), run: clearFavorites },
+              ]}
+              tags={{ value: color, set: setFavoritesColor }}
+            />
           </Menu.Positioner>
         </MenuPortal>
       </Menu.Root>
     </>
+  );
+}
+
+/** My favorites' new name, in place of its row's: Enter or leaving it names them ("" gives back
+ *  收藏), Esc leaves it. */
+function FavRename({ name, done }: { name: string; done: () => void }) {
+  const over = useRef(false);
+  const end = (value?: string) => {
+    if (over.current) return;
+    over.current = true;
+    done();
+    if (value !== undefined && value.trim() !== name) setFavoritesName(value.trim());
+  };
+  return (
+    <input
+      autoFocus
+      aria-label={t("menu.rename")}
+      defaultValue={name}
+      maxLength={40}
+      onFocus={(e) => e.currentTarget.select()}
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+        if (e.key === "Enter") end(e.currentTarget.value);
+        else if (e.key === "Escape") end();
+      }}
+      onBlur={(e) => end(e.currentTarget.value)}
+      className="no-ring h-6 w-full min-w-0 rounded-sm bg-fill px-1.5 text-md font-medium"
+    />
   );
 }
 
@@ -1353,7 +1432,7 @@ export function MenuItems({ lead = [], items, tags, children, foot, label, final
  *  the menu; the dot of its own colour is ringed and checked, and a press on it takes the tag off. */
 function TagDots({ tags, i }: { tags: Tags; i: number }) {
   return (
-    <div role="group" aria-label={t("color.tags")} style={{ "--i": i } as CSSProperties} className="mt-1.5 flex items-center justify-between gap-0.5 border-t border-edge px-1 pt-1.5">
+    <div role="group" aria-label={t("color.tags")} style={{ "--i": i } as CSSProperties} className={cn("flex items-center justify-between gap-0.5 px-1", i > 0 ? "mt-1.5 border-t border-edge pt-1.5" : "py-0.5")}>
       {COLORS.map((c) => {
         const on = tags.value === c;
         const name = t(`color.${c}`);

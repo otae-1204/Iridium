@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/kumoSleeping/iridium/internal/api"
 	"github.com/kumoSleeping/iridium/internal/store"
@@ -29,7 +30,12 @@ func (s *Server) favoritesReply(w http.ResponseWriter, member string) {
 		s.fault(w, err)
 		return
 	}
-	reply(w, http.StatusOK, api.Favorites{Channels: chs, Color: api.Color(c)})
+	n, err := s.st.FavoritesName(member)
+	if err != nil {
+		s.fault(w, err)
+		return
+	}
+	reply(w, http.StatusOK, api.Favorites{Channels: chs, Color: api.Color(c), Name: n})
 }
 
 // favoritesPatch tags the caller's favorites' folder with a colour, or takes it off.
@@ -45,6 +51,19 @@ func (s *Server) favoritesPatch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := s.st.SetFavoritesColor(member, string(*req.Color)); err != nil {
+			s.fault(w, err)
+			return
+		}
+		s.hub.Set("favorites", s.favoritesSeq.Add(1))
+	}
+	if req.Name != nil {
+		// One line, spaces at its ends dropped.
+		name := strings.TrimSpace(strings.Join(strings.Fields(*req.Name), " "))
+		if utf8.RuneCountInString(name) > api.FavoritesNameMax {
+			refuse(w, http.StatusBadRequest, "bad_request", fmt.Sprintf("name: at most %d characters", api.FavoritesNameMax))
+			return
+		}
+		if err := s.st.SetFavoritesName(member, name); err != nil {
 			s.fault(w, err)
 			return
 		}

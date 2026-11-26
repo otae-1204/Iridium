@@ -62,3 +62,23 @@ func (s *Store) SetFavoritesColor(member, color string) error {
 	_, err := s.db.Exec(`INSERT INTO favorite_colors (member, color) VALUES (?, ?) ON CONFLICT (member) DO UPDATE SET color = excluded.color`, member, color)
 	return err
 }
+
+// FavoritesName is the name member gave its favorites ("" none: the page's own).
+func (s *Store) FavoritesName(member string) (string, error) {
+	var n string
+	err := s.db.QueryRow(`SELECT name FROM favorite_names WHERE member = ?`, member).Scan(&n)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return n, err
+}
+
+// SetFavoritesName names member's favorites ("" takes the name off).
+func (s *Store) SetFavoritesName(member, name string) error {
+	if name == "" {
+		_, err := s.db.Exec(`DELETE FROM favorite_names WHERE member = ?`, member)
+		return err
+	}
+	_, err := s.db.Exec(`INSERT INTO favorite_names (member, name) VALUES (?, ?) ON CONFLICT (member) DO UPDATE SET name = excluded.name`, member, name)
+	return err
+}
