@@ -21,6 +21,23 @@ import { CARD_POP } from "./profilecard";
 export type Named = { agents: AgentRow[]; people: AgentRow[]; names: string[]; card: (m: AgentRow, done: () => void) => ReactNode; channel?: string; may?: boolean };
 export const Nicks = createContext<Named | null>(null);
 
+/** The channel's message numbers as words name them ("#462": lib.ts refSpans): end, the newest
+ *  now (read as the words are drawn); jump, to one (channel/jump.ts, as a quote pressed). One
+ *  object kept for the page, its fields set as they change: nothing drawn again for a new end. */
+export type Seqs = { end: number; jump: (n: number) => void };
+export const SeqRefs = createContext<Seqs | null>(null);
+
+/** A message's number named in the words: pressed, the message itself, shown softly a moment. */
+export function SeqLink({ n }: { n: number }) {
+  const seqs = useContext(SeqRefs);
+  if (!seqs) return <>#{n}</>;
+  return (
+    <button type="button" onClick={() => seqs.jump(n)} className="rounded-sm text-ink-2 tabular-nums underline decoration-ink-4 underline-offset-2 hover:text-ink hover:decoration-ink-2">
+      #{n}
+    </button>
+  );
+}
+
 /** All that an @ may name in a channel of these. */
 export const namesOf = (agents: AgentRow[], people: AgentRow[]) => [...agents.map((a) => a.nick), ...people.map((p) => p.nick), ALL_MEMBERS, ALL_AGENTS].filter(Boolean);
 
@@ -62,11 +79,12 @@ export function NickLink({ nick }: { nick: string }) {
 
 /** A person's words in a channel: what they name drawn in place (Worded), the members they name
  *  too. Outside a channel's page (no members given): the words as Worded draws them. */
-export function NickWords({ text }: { text: string }) {
+export function NickWords({ text, n }: { text: string; n?: number }) {
   const ch = useContext(Nicks);
+  const seqs = useContext(SeqRefs);
   if (!ch) return <Worded text={text} />;
   // An <at> written in them reads as "@nick" (Satori's elements and Markdown mixed).
   const words = fromSatori(text, (session) => ch.agents.find((a) => a.session === session)?.nick);
-  const parts = nickParts(words, ch.names);
-  return <>{parts.map((p, i) => (typeof p === "string" ? <Worded key={i} text={p} /> : <NickLink key={i} nick={p.nick} />))}</>;
+  const parts = nickParts(words, ch.names, seqs ? Math.max(seqs.end, n ?? 0) : 0);
+  return <>{parts.map((p, i) => (typeof p === "string" ? <Worded key={i} text={p} /> : "nick" in p ? <NickLink key={i} nick={p.nick} /> : <SeqLink key={i} n={p.seq} />))}</>;
 }

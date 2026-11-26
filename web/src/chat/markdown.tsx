@@ -14,8 +14,8 @@ import { cn } from "../ui";
 import { Linked, LinkFiles } from "./files";
 import { Code } from "./hl";
 import { NamedLink } from "./mention";
-import { nickOfURL } from "./channel/lib";
-import { NickLink } from "./channel/nick";
+import { nickOfURL, seqOfURL } from "./channel/lib";
+import { NickLink, SeqLink } from "./channel/nick";
 import { draftWords, fromSatori, refOf } from "./refs";
 import { useTyped } from "./typed";
 
@@ -90,6 +90,9 @@ export const MARKDOWN: Partial<StreamdownProps> = {
       // An agent of the channel called by its nick (chat/channel: lib.ts linkNicks).
       const nick = nickOfURL(p.href);
       if (nick) return <NickLink nick={nick} />;
+      // A message of the channel by its number (lib.ts linkNicks: refSpans).
+      const seq = seqOfURL(p.href);
+      if (seq) return <SeqLink n={seq} />;
       const r = typeof p.href === "string" ? markdownRef(p.href, textOf(p.children)) : undefined;
       return r ? <NamedLink m={r} /> : <defaultComponents.a {...p} />;
     },
@@ -100,7 +103,7 @@ export const MARKDOWN: Partial<StreamdownProps> = {
   remarkPlugins: [...Object.values(defaultRemarkPlugins), literalFolderPaths],
   rehypePlugins: [],
   tableMaxHeight: 0,
-  urlTransform: (url, key, node) => (linkID(url) || markdownRef(url, "") || nickOfURL(url) ? url : defaultUrlTransform(url, key, node)),
+  urlTransform: (url, key, node) => (linkID(url) || markdownRef(url, "") || nickOfURL(url) || seqOfURL(url) ? url : defaultUrlTransform(url, key, node)),
   allowElement: (e) => e.tagName !== "a" || /^(https?|ir):/i.test(String(e.properties.href ?? "")),
   unwrapDisallowed: true,
 };

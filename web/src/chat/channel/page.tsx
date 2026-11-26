@@ -53,7 +53,7 @@ import { NotJoined } from "./key";
 import { Face as ChannelFace, MemberFace } from "./face";
 import { AgentFace } from "./members";
 import { PersonCard, PersonMenu, useNamed } from "./person";
-import { NickLink, Nicks, NickWords } from "./nick";
+import { NickLink, Nicks, NickWords, SeqRefs, type Seqs } from "./nick";
 import { useRecalled } from "../reactions";
 import { lendWork, unlendWork } from "./workkey";
 
@@ -326,6 +326,10 @@ export function ChannelPage({ id, sheet = 0, bar, record }: { id: string; sheet?
   };
   // A quote pressed: the message it answers, brought if the page has not got it (channel/jump.ts).
   const jump = (n: number) => void goTo(scroller.current, () => seqEl(scroller.current, n), () => around(log, n), changed);
+  // "#n" in the words, a key to message n (nick.tsx SeqLink): one object, its fields kept current.
+  const seqs = useRef<Seqs>({ end: 0, jump }).current;
+  seqs.jump = jump;
+  seqs.end = log.loaded || log.msgs.length ? log.end : 0;
   // Who works, lent to the top bar's work key (workkey.tsx) at each draw, once the conversation is.
   useEffect(() => void (!hold && lendWork(id, { agents, stateAt, msgs: log.msgs, jump, may, solo: !!solo })));
   useEffect(() => () => unlendWork(id), [id]);
@@ -441,6 +445,7 @@ export function ChannelPage({ id, sheet = 0, bar, record }: { id: string; sheet?
   }
   return (
     <Nicks.Provider value={nicks}>
+     <SeqRefs.Provider value={seqs}>
       <div className="relative h-full" onDragOver={(e) => files(e) || session(e) || place(e)} onDrop={drop}>
         {/* Nothing said yet: the pane's splash is told so (splash/splash.tsx). */}
         <ChannelSplash id={id} show={!hold && !sent.length && (log.loaded ? !log.msgs.length : justMade(id))} last={agents.at(-1)} agents={agents.length} />
@@ -498,6 +503,7 @@ export function ChannelPage({ id, sheet = 0, bar, record }: { id: string; sheet?
           </div>
         </div>
       </div>
+     </SeqRefs.Provider>
     </Nicks.Provider>
   );
 }
@@ -801,7 +807,7 @@ function PersonLine({ m, a, bare, channel, who, call, may, quote, quoted, old, j
                 n={m.n}
                 onJump={openChat}
                 bare={bare}
-                words={wrap(<NickWords text={w.words} />)}
+                words={wrap(<NickWords text={w.words} n={m.n} />)}
                 quote={over}
                 menu={by.who.channel ? (at, close) => <PersonMenu user={a.id} name={a.name} call={may ? call : undefined} at={at} close={close} /> : undefined}
                 card={by.who.channel ? <PersonCard user={a.id} name={a.name} avatar={by.who.avatar} dm={false} call={may ? call : undefined} /> : undefined}
@@ -816,7 +822,7 @@ function PersonLine({ m, a, bare, channel, who, call, may, quote, quoted, old, j
                 time={m.time}
                 n={m.n}
                 bare={bare}
-                words={wrap(<NickWords text={w.words} />)}
+                words={wrap(<NickWords text={w.words} n={m.n} />)}
                 quote={over}
                 menu={by.mine ? undefined : (at, close) => <PersonMenu user={a.id} name={a.name} call={may ? call : undefined} at={at} close={close} />}
                 card={<PersonCard user={a.id} name={a.name} avatar={by.who.avatar} dm={!by.mine} call={may && !by.mine ? call : undefined} />}

@@ -18,7 +18,7 @@ import { givenTurn, linkNicks } from "./channel/lib";
 import { AfterContext, ChannelContext } from "./context";
 import { parseGiven, type GivenRec } from "./given";
 import { reactionLine } from "./react";
-import { Nicks, NickWords } from "./channel/nick";
+import { Nicks, NickWords, SeqRefs } from "./channel/nick";
 import { Face as ChannelFace } from "./channel/face";
 import { CARD_POP } from "./channel/profilecard";
 import { Popover } from "@base-ui/react/popover";
@@ -488,7 +488,11 @@ export const Assistant = memo(function Assistant({ b, session, draft }: { b: Blo
   // A merged forward in them: its card under them (forwardcard.tsx).
   const fw = splitForwards(b.text ?? "");
   const said = withoutFiles(withoutNameLines(fromSatori(fw.words)), new Set(b.files?.map((f) => f.path)), home);
-  const text = names ? linkNicks(said, names) : said;
+  // The numbers it names, up to the newest the page has as it is drawn, its own at least (a
+  // message names those before it: drawn before a newer came, it is not drawn again for it).
+  const seqs = useContext(SeqRefs);
+  const end = seqs ? Math.max(seqs.end, Number(b.at) || 0) : 0;
+  const text = names ? linkNicks(said, names, end) : said;
   // A file link's file shows where the words put it; the rest (file lines) under them.
   const under = b.files?.filter((f) => !isLink(f)) ?? [];
   // data-at: where a quote of it is gone to on a session's page (channel/jump.ts).

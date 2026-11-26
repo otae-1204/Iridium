@@ -268,13 +268,79 @@ export function nickSpans(text: string, nicks: string[]): { from: number; to: nu
   return out;
 }
 
-/** Words cut at the nicks they call: plain runs and nicks, in order. */
-export function nickParts(text: string, nicks: string[]): (string | { nick: string })[] {
-  const out: (string | { nick: string })[] = [];
+/** Where words name a message of the channel by its number (kumo, 2026-11-26: "#462" goes to
+ *  it): "#n" standing by itself, 1 <= n <= end, no leading 0. Not in code (a fenced block, an
+ *  inline span), an address (a token with "://" or "www."), a Markdown link's words, an HTML
+ *  entity (&#123;), a colour or a unit (#333a, #12px: a letter or digit after it), a heading
+ *  ("# 123": a space after #), nor after "PR", "Issue" or "pull" (#75 of a PR), with the ones
+ *  run on from it ("PR #76、#77"). */
+export function refSpans(text: string, end: number): { from: number; to: number; seq: number }[] {
+  if (!(end > 0) || !text.includes("#")) return [];
+  const out: { from: number; to: number; seq: number }[] = [];
+  let fenced = false;
   let at = 0;
-  for (const s of nickSpans(text, nicks)) {
+  for (const line of text.split("\n")) {
+    const start = at;
+    at += line.length + 1;
+    const t = line.trim();
+    if (t.startsWith("```") || t.startsWith("~~~")) {
+      fenced = !fenced;
+      continue;
+    }
+    if (fenced) continue;
+    let code = false;
+    // The end of the last "#n" of a PR's run, or -1; where the last one taken ended.
+    let pr = -1;
+    let last = -1;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === "`") code = !code;
+      if (code || c !== "#") continue;
+      const digits = /^[1-9]\d*/.exec(line.slice(i + 1));
+      if (!digits) continue;
+      const to = i + 1 + digits[0].length;
+      const after = line[to];
+      if (after !== undefined && (/[\p{L}\p{N}_]/u.test(after) || (after === "." && /\d/.test(line[to + 1] ?? "")))) continue;
+      const before = line[i - 1];
+      // A "/" only between two numbers ("#130/#147"); else a path's or an address's.
+      const slash = before === "/" && last === start + i - 1;
+      if (before !== undefined && !slash && /[\p{L}\p{N}_#&/:=?.\-]/u.test(before)) continue;
+      const token = line.slice(0, i).split(/\s/).at(-1) ?? "";
+      if (/:\/\/|^www\./i.test(token)) continue;
+      const head = line.slice(0, i);
+      if ((head.match(/\[/g)?.length ?? 0) > (head.match(/\]/g)?.length ?? 0)) continue;
+      const run = pr >= 0 && /^[\s、，,/&和与及]*$/u.test(line.slice(pr, i));
+      if (run || /\b(pr|prs|issue|issues|pull)\s*$/i.test(head)) {
+        pr = to;
+        continue;
+      }
+      pr = -1;
+      const seq = Number(digits[0]);
+      if (seq > end) continue;
+      out.push({ from: start + i, to: start + to, seq });
+      last = start + to;
+      i = to - 1;
+    }
+  }
+  return out;
+}
+
+/** The address a message number's link in Markdown has (chat/markdown.tsx draws it: SeqLink). */
+export const seqURL = (n: number) => `ir:seq/${n}`;
+export const seqOfURL = (url: unknown) => {
+  const m = typeof url === "string" ? /^ir:seq\/([1-9]\d*)$/.exec(url) : null;
+  return m ? Number(m[1]) : undefined;
+};
+
+/** Words cut at the nicks they call: plain runs and nicks, in order. */
+export function nickParts(text: string, nicks: string[], end = 0): (string | { nick: string } | { seq: number })[] {
+  const out: (string | { nick: string } | { seq: number })[] = [];
+  let at = 0;
+  const spans = [...nickSpans(text, nicks), ...refSpans(text, end)].sort((a, b) => a.from - b.from);
+  for (const s of spans) {
+    if (s.from < at) continue;
     if (s.from > at) out.push(text.slice(at, s.from));
-    out.push({ nick: s.nick });
+    out.push("nick" in s ? { nick: s.nick } : { seq: s.seq });
     at = s.to;
   }
   if (at < text.length) out.push(text.slice(at));
@@ -293,11 +359,13 @@ export const nickOfURL = (url: unknown) => {
 };
 
 /** An agent's Markdown with each nick it calls a link, drawn as the nick's mark. */
-export function linkNicks(text: string, nicks: string[]): string {
+export function linkNicks(text: string, nicks: string[], end = 0): string {
   let out = "";
   let at = 0;
-  for (const s of nickSpans(text, nicks)) {
-    out += `${text.slice(at, s.from)}[@${s.nick}](${nickURL(s.nick)})`;
+  const spans = [...nickSpans(text, nicks), ...refSpans(text, end)].sort((a, b) => a.from - b.from);
+  for (const s of spans) {
+    if (s.from < at) continue;
+    out += "nick" in s ? `${text.slice(at, s.from)}[@${s.nick}](${nickURL(s.nick)})` : `${text.slice(at, s.from)}[#${s.seq}](${seqURL(s.seq)})`;
     at = s.to;
   }
   return out + text.slice(at);
