@@ -8,7 +8,7 @@
 // sessions, this machine's groups, each machine's workspaces, a folder by its path; a session's or
 // a group's row dropped here names one too, on a phone the list alone: a link where the caret is,
 // the box showing its mark and its name, one piece a Backspace takes whole (the user, 2026-11-12;
-// refs.ts boxed, edited). Only a reference: nothing delivered, no one notified, nothing
+// refs.ts boxed, edited); in an empty box, an attachment, two presses each (bsattach.ts). Only a reference: nothing delivered, no one notified, nothing
 // granted. Shift+Tab cycles the approval mode; Esc stops the turn. The draft is kept on
 // this device; files pasted, dropped or attached go up in chunks while you type, a picture in its
 // own shape under a veil drawn back as it goes; nothing is sent till all are up.
@@ -17,6 +17,7 @@ import { useQueries } from "../api/queries";
 import { useQuery } from "../api/query";
 import { forwardRef, Fragment, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import type { Agent, Command, Script, SessionState as LiveSession } from "../api/types.gen";
+import { MARK_FOR, press } from "./bsattach";
 import { ScriptFace, useScripts } from "./channel/script";
 import { runShell, shellLine, useShellable } from "./shell";
 import { api, missing } from "../api/client";
@@ -169,6 +170,14 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ s,
   const shownQuote = quote ?? lastQuote.current;
   const [text, setText] = useState(() => kept(draftKey(s.id)) ?? "");
   const atts = useSyncExternalStore(subscribeUnsent, () => unsent.get(s.id) ?? NO_ATTS);
+  // The attachment a Backspace in the empty box marked (bsattach.ts): a second takes it; it goes
+  // by itself after a while.
+  const [picked, setPicked] = useState<string | null>(null);
+  useEffect(() => {
+    if (!picked) return;
+    const id = setTimeout(() => setPicked(null), MARK_FOR);
+    return () => clearTimeout(id);
+  }, [picked]);
   const sid = s.id;
   const setAtts = (f: (a: Att[]) => Att[]) => setUnsent(sid, f);
   const [busy, setBusy] = useState(false);
@@ -208,6 +217,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ s,
   });
 
   const type = (v: string) => {
+    setPicked(null);
     setText(v);
     keep(draftKey(s.id), v || null);
     setAt(null);
@@ -508,7 +518,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ s,
             const going = !a.ref && !a.error;
             return (
               <li key={a.key} className="g-pop relative shrink-0 pt-1.5 pr-1.5">
-                <span className="relative block overflow-hidden rounded-lg shadow-[0_0_0_0.5px_var(--edge)]">
+                <span data-marked={a.key === picked || undefined} className={cn("relative block overflow-hidden rounded-lg shadow-[0_0_0_0.5px_var(--edge)] outline-offset-1 transition-[outline-color] duration-(--dur-2)", a.key === picked ? "outline-2 outline-ink outline-solid" : "outline-2 outline-transparent outline-solid")}>
                   {a.url ? (
                     <Zoom full={a.url} name={a.file.name}>
                       <button type="button" aria-label={`${a.file.name} · ${t("msg.openImage")}`} className="block cursor-zoom-in">
@@ -615,8 +625,9 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ s,
             setCaret(wordsAt(shownBox, el.selectionStart));
           }}
           onFocus={(e) => setCaret(wordsAt(shownBox, e.currentTarget.selectionStart))}
-          onBlur={() => setCaret(null)}
-          onCompositionStart={() => setComposing(true)}
+          onBlur={() => (setCaret(null), setPicked(null))}
+          onPointerDown={() => setPicked(null)}
+          onCompositionStart={() => (setComposing(true), setPicked(null))}
           onCompositionEnd={() => setComposing(false)}
           onPaste={(e) => {
             const pasted = [...e.clipboardData.files];
@@ -625,7 +636,16 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ s,
             attach(pasted);
           }}
           onKeyDown={(e) => {
-            if (composing || e.nativeEvent.isComposing || e.keyCode === 229) return;
+            const composes = composing || e.nativeEvent.isComposing || e.keyCode === 229;
+            // Backspace in the empty box: its attachments, two presses each (bsattach.ts); after the
+            // message answered, which one press puts away first.
+            const b = press(picked, { key: e.key, words: text, composing: composes, repeat: e.repeat, keys: quote ? [] : atts.map((a) => a.key) });
+            if (b.marked !== picked) setPicked(b.marked);
+            if (b.ours) {
+              if (b.take) remove(b.take);
+              return e.preventDefault();
+            }
+            if (composes) return;
             const move = shown ? { ArrowDown: 1, ArrowUp: -1 }[e.key] : undefined;
             const now = list.length ? Math.min(at ?? 0, list.length - 1) : nickOpts.length ? nickSel : sel;
             if (move) setAt((now + move + shown) % shown);
