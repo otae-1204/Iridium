@@ -35,7 +35,7 @@ const link = (l: Partial<Link>) => setCarried("link", { ...(getCarried<Link>("li
 // The states every page carries. A key the daemon does not carry for this terminal (confirms and
 // colors, but for panels) is said to be ignored as the stream opens; the rest goes on.
 // "faces" ahead of "list": the rows' faces are known as the rows are first drawn.
-const ALWAYS = ["faces", "list", "guilds", "update", "needs", "pairing", "terminals", "channels", "avatars", "cards", "voice", "ats", "memory", "roles", "scripts"];
+const ALWAYS = ["faces", "list", "guilds", "update", "needs", "pairing", "terminals", "channels", "avatars", "cards", "voice", "ats", "memory", "roles", "scripts", "favorites"];
 /** How many states a stream carries at most (internal/server watchStates). */
 export const MAX_KEYS = 40;
 /** More states the open chat asks for, in the order it wants them: a channel's other agents

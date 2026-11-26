@@ -59,7 +59,7 @@ import type {
 import type { Device, Passkeys, PasskeyDevice, ShellOutput, ShellRun, ShellStarted } from "./types.gen";
 import type { Quota, SecretInfo, Secrets, SetSecret, Usage } from "./types.gen";
 import type { AgentChoices, Block, ChannelMembers, ChannelReads, Injection, MemberPatch, NewMember } from "./types.gen";
-import type { MemberCard, Memory, Profile as Card, ProfilePatch, Self } from "./types.gen";
+import type { Favorites, MemberCard, Memory, Profile as Card, ProfilePatch, Self } from "./types.gen";
 import type { NewScript, Script, ScriptPatch, ScriptRun } from "./types.gen";
 
 /** A message of a channel's log (Satori's message.list): id its number there. */
@@ -319,6 +319,9 @@ export const api = {
   channelProfile: (id: string) => get<Card>(`/v1/internal/channels/${enc(id)}/profile`),
   patchChannel: (id: string, p: ProfilePatch) => write<Card>("PATCH", `/v1/internal/channels/${enc(id)}`, p),
   self: () => get<Self>("/v1/internal/self"),
+  /** The channels this login favoured, in its order; put: the whole list. */
+  favorites: () => get<Favorites>("/v1/internal/favorites"),
+  putFavorites: (channels: string[]) => write<Favorites>("PUT", "/v1/internal/favorites", { channels }),
   /** What a session's agent chose to remember; forget: one of them gone. */
   memory: (session: string) => get<Memory[]>(`/v1/internal/memory?session=${enc(session)}`),
   forget: (session: string, id: number) => write<unknown>("DELETE", `/v1/internal/memory/${id}?session=${enc(session)}`),

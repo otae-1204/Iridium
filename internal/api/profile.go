@@ -92,6 +92,12 @@ type Memory struct {
 	At      int64  `json:"at"`
 }
 
+// Favorites are the channels the caller favoured (GET/PUT internal/favorites), in its order: a
+// session's own channel is its id. Its own alone; PUT gives the whole list.
+type Favorites struct {
+	Channels []string `json:"channels"`
+}
+
 // Remember is a memory to keep.
 type Remember struct {
 	Text string `json:"text"`

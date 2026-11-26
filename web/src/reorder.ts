@@ -20,8 +20,11 @@ export type Edge = "top" | "bottom";
 /** The row a drop would go to now (its mark, dropMark), the row the line is drawn at (that one,
  *  or the one the drop lands above) and its edge. */
 export type Over = { at: string; line: string; edge: Edge };
-/** A drop a row takes of another kind, and the row whose top it lands at (dropMark). */
-export type Also = { kind: Dragged["kind"]; lane: string; drop: (d: Dragged) => void; line: string };
+/** A drop a row takes of another kind, or from another lane (lane ANY: from any), and the row
+ *  whose top it lands at (dropMark), or its foot (edge). */
+export type Also = { kind: Dragged["kind"]; lane: string; drop: (d: Dragged) => void; line: string; edge?: Edge };
+/** An Also's lane: what is dragged from any lane. */
+export const ANY = "*";
 
 let dragged: Dragged | null = null;
 let over: Over | null = null;
@@ -34,8 +37,32 @@ const setOver = (o: Over | null) => {
   emit();
 };
 
-export const startDrag = (d: Dragged) => ((dragged = d), emit());
-export const endDrag = () => ((dragged = null), (over = null), emit());
+/** The list's scrolling as a drag nears its top or foot, stopped as the drag ends. */
+let stopScroll: (() => void) | null = null;
+
+/** A drag begun: with a mouse, row is the row taken (the list it is in scrolls as the pointer
+ *  nears its top or foot, kumo, 2026-11-26); a finger's (touchDrag) scrolls its own. */
+export const startDrag = (d: Dragged, row?: HTMLElement) => {
+  dragged = d;
+  stopScroll?.();
+  stopScroll = null;
+  const list = row && scroller(row);
+  if (list) {
+    let at: { x: number; y: number } | null = null;
+    const track = (e: DragEvent) => void (at = { x: e.clientX, y: e.clientY });
+    addEventListener("dragover", track, true);
+    const stop = edgeScroll(list, () => at);
+    stopScroll = () => (stop(), removeEventListener("dragover", track, true));
+  }
+  emit();
+};
+export const endDrag = () => {
+  stopScroll?.();
+  stopScroll = null;
+  dragged = null;
+  over = null;
+  emit();
+};
 
 /** What the list takes, round its rows: over no row a drop goes to (none took the dragover) or
  *  out of the list, no line. Not on leaving a row: the line would blink between two. */
@@ -55,18 +82,19 @@ export const dropMark = (d: Dragged) => `${d.kind}:${d.lane}:${d.id}`;
 type Target = { pick: () => "own" | "also" | null; aim: (how: "own" | "also", r: DOMRect, y: number) => Over; land: (how: "own" | "also", d: Dragged, edge: Edge) => void };
 const targets = new Map<string, Target>();
 
-/** What a row takes to be dropped on: by one of its kind and lane, not itself; also, by one of
- *  another kind (a folder on a session at its group's root). */
-export function dropTarget(kind: Dragged["kind"], id: string, lane: string, drop: (d: Dragged, edge: Edge) => void, also?: Also) {
+/** What a row takes to be dropped on: by one of its kind and lane (any lane: anyLane, a
+ *  favourite's, taking a session from anywhere), not itself; also, by one of another kind (a folder
+ *  on a session at its group's root). */
+export function dropTarget(kind: Dragged["kind"], id: string, lane: string, drop: (d: Dragged, edge: Edge) => void, also?: Also, anyLane = false) {
   const at = dropMark({ kind, id, lane });
   const t: Target = {
     pick: () => {
       const d = dragged;
-      if (d?.kind === kind && d.lane === lane && d.id !== id) return "own";
-      if (also && d?.kind === also.kind && d.lane === also.lane) return "also";
+      if (d?.kind === kind && (d.lane === lane || anyLane) && d.id !== id) return "own";
+      if (also && d?.kind === also.kind && (d.lane === also.lane || also.lane === ANY)) return "also";
       return null;
     },
-    aim: (how, r, y) => (how === "also" ? { at, line: also!.line, edge: "top" } : { at, line: at, edge: y < r.top + r.height / 2 ? "top" : "bottom" }),
+    aim: (how, r, y) => (how === "also" ? { at, line: also!.line, edge: also!.edge ?? "top" } : { at, line: at, edge: y < r.top + r.height / 2 ? "top" : "bottom" }),
     land: (how, d, edge) => (how === "also" ? also!.drop(d) : drop(d, edge)),
   };
   targets.set(at, t);
@@ -98,6 +126,40 @@ function scroller(el: HTMLElement): HTMLElement | null {
     if ((o === "auto" || o === "scroll") && p.scrollHeight > p.clientHeight) return p;
   }
   return null;
+}
+
+/** The edge band a drag scrolls the list in: 56px, a quarter of a short list. The speed grows
+ *  with how deep in the band the pointer is (out past the list's edge: all of it), up to MAX px a
+ *  millisecond, and from nothing over RAMP ms after it came in, so a pointer that passes the band
+ *  on its way, or rests in it, does not throw the list to its end. */
+const BAND = 56;
+const MAX = 1.2;
+const RAMP = 400;
+
+/** Scrolls list while the point where() gives (a pointer's, null: none yet) is in its top or
+ *  foot band and within its width; moved: after each step that scrolled it. Stopped by what it
+ *  gives back. */
+export function edgeScroll(list: HTMLElement, where: () => { x: number; y: number } | null, moved?: () => void): () => void {
+  let since = 0;
+  let last = 0;
+  let frame = requestAnimationFrame(function tick(now) {
+    const p = where();
+    const b = list.getBoundingClientRect();
+    const band = Math.min(BAND, b.height / 4);
+    const depth = !p || p.x < b.left || p.x > b.right ? 0 : p.y < b.top + band ? -Math.min(1, (b.top + band - p.y) / band) : p.y > b.bottom - band ? Math.min(1, (p.y - b.bottom + band) / band) : 0;
+    if (!depth) since = 0;
+    else {
+      since ||= now;
+      const dt = Math.min(32, now - (last || now));
+      const v = Math.sign(depth) * MAX * depth * depth * Math.min(1, (now - since) / RAMP);
+      const was = list.scrollTop;
+      list.scrollTop += v * dt;
+      if (list.scrollTop !== was) moved?.();
+    }
+    last = now;
+    frame = requestAnimationFrame(tick);
+  });
+  return () => cancelAnimationFrame(frame);
 }
 
 /** A finger's drag: row held (its menu opened, ui.tsx useLongPress), then moved. The row's copy
@@ -133,17 +195,7 @@ export function touchDrag(d: Dragged, row: HTMLElement, from: { x: number; y: nu
     const how = t?.pick();
     setOver(t && how ? t.aim(how, el.getBoundingClientRect(), y) : null);
   };
-  let frame = requestAnimationFrame(function tick() {
-    if (list) {
-      const b = list.getBoundingClientRect();
-      const edge = Math.min(56, b.height / 4);
-      const v = y < b.top + edge ? -(b.top + edge - y) / 3 : y > b.bottom - edge ? (y - b.bottom + edge) / 3 : 0;
-      const was = list.scrollTop;
-      if (v) list.scrollTop += v;
-      if (list.scrollTop !== was) hit();
-    }
-    frame = requestAnimationFrame(tick);
-  });
+  const stop = list ? edgeScroll(list, () => ({ x, y }), hit) : () => {};
   const move = (e: PointerEvent) => {
     if (e.pointerId !== pointerId) return;
     x = e.clientX;
@@ -154,7 +206,7 @@ export function touchDrag(d: Dragged, row: HTMLElement, from: { x: number; y: nu
   const still = (e: TouchEvent) => void (e.cancelable && e.preventDefault());
   const end = (e: PointerEvent) => {
     if (e.pointerId !== pointerId) return;
-    cancelAnimationFrame(frame);
+    stop();
     ghost.remove();
     removeEventListener("pointermove", move);
     removeEventListener("pointerup", end);

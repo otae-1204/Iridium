@@ -9,7 +9,7 @@
 // and at its foot the colour tags (colors.ts); a group's: rename, its path, 通知. The mouse resting
 // on a row fetches its chat ahead.
 import { Menu } from "@base-ui/react/menu";
-import { Archive, ArchiveRestore, Bot, Check, ChevronRight, Copy, Ellipsis, Ungroup, Folder, FolderOpen, ListCollapse, Moon, Pencil, Pin, PinOff, Plus, RefreshCw, Square, FolderPlus } from "lucide-react";
+import { Archive, ArchiveRestore, Bookmark, BookmarkMinus, Bot, Check, ChevronRight, Copy, Ellipsis, Ungroup, Folder, FolderOpen, ListCollapse, Moon, Pencil, Pin, PinOff, Plus, RefreshCw, Square, FolderPlus } from "lucide-react";
 import { ConfirmIcon, confirmName, confirmTitle } from "./confirmname";
 import { Fragment, lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode, type RefObject } from "react";
 import { api } from "./api/client";
@@ -29,6 +29,7 @@ import { errText, toast } from "./toast";
 import { manages, useMachines, useMe, useSaidLine, useUpdate } from "./data";
 import { agentName, ago, cn, fine, IconKey, IrMark, keep, kept, Lamp, lampOf, Logo, own, sessionStatusText, statusText, tilde, Tip, titleOf, useEver, untitled, useLongPress, useMenuAt, useMinute, usePointAnchor, MenuPortal } from "./ui";
 import { AppName } from "./appkey";
+import { isFavorite, placeFavorite, setFavorite, useFavorites } from "./favorites";
 import { PLACE_DRAG, SESSION_DRAG } from "./chat/refs";
 import { badge, isQuiet, setQuiet, useAt, useQuiet, useUnread } from "./unread";
 import { Face, FaceStack } from "./chat/channel/face";
@@ -36,7 +37,7 @@ import { CloudBadge, MachineFace, shownPath, useLate, useMachine, type Machine }
 import { getCarried, setCarried, useCarried, useLink, useList } from "./store";
 import { channelLamp, isMulti } from "./chat/channel/lib";
 import { useVoiceItem, VoiceDock, VoiceMark } from "./voice/dock";
-import { dropMark, dropTarget, endDrag, listDrop, pinFolder, placeFolder, placeGroup as placeGroupKey, placeSession, sortList, startDrag, touchDrag, useDragged, useOver, type Dragged, type Edge, type Over } from "./reorder";
+import { ANY, dropMark, dropTarget, endDrag, listDrop, pinFolder, placeFolder, placeGroup as placeGroupKey, placeSession, sortList, startDrag, touchDrag, useDragged, useOver, type Dragged, type Edge, type Over } from "./reorder";
 
 const STEP = 18;
 /** The deepest a folder is drawn in: those deeper are drawn as deep, the sidebar being narrow. */
@@ -137,6 +138,10 @@ function Divider({ width, setWidth }: { width: number; setWidth: (w: number) => 
   );
 }
 
+/** The favorites' key in the open-or-folded record, and the lane of their row's drop (none of its kind). */
+const FAV = "fav";
+const FAV_HEAD = "fav-head";
+
 export function Sidebar(p: Props) {
   const machines = useMachines();
   saidNow = useSaidLine();
@@ -178,7 +183,15 @@ export function Sidebar(p: Props) {
   const [archShown, setArchShown] = useState(ARCHIVE_STEP);
   const archOpen = p.expanded("archive");
   useEffect(() => void (!archOpen && setArchShown(ARCHIVE_STEP)), [archOpen]);
-  const shape = [loose.map((c) => c.id).join(","), ...p.tree.workspaces.map((w) => `${w.key}:${p.expanded(w.key)}:${foldShape(roots(w), w.key)}:${allFolders(tops(w)).map((f) => `${f.key}${p.expanded(f.key)}${foldShape(f.sessions, f.key)}`).join(",")}`), archOpen, p.tree.archived.length, archShown].join("|");
+  // My favorites (favorites.ts): those listed, not archived, in my order; none, no block.
+  const favIds = useFavorites();
+  const everyone = useList();
+  const favs = favIds.flatMap((id) => {
+    const s = everyone?.find((x) => x.id === id);
+    return s && !s.archived && !s.subagent ? [s] : [];
+  });
+  const favOpen = p.expanded(FAV);
+  const shape = [favs.length ? `${favOpen}:${favOpen ? favs.map((s) => s.id).join(",") : ""}` : "", loose.map((c) => c.id).join(","), ...p.tree.workspaces.map((w) => `${w.key}:${p.expanded(w.key)}:${foldShape(roots(w), w.key)}:${allFolders(tops(w)).map((f) => `${f.key}${p.expanded(f.key)}${foldShape(f.sessions, f.key)}`).join(",")}`), archOpen, p.tree.archived.length, archShown].join("|");
   useMoves(list, true)(shape);
   // Dragged to a new place (reorder.ts): the sessions beside each other, by the key of their
   // group's root or folder, and the groups, as last drawn. The page shows the new order at once.
@@ -203,6 +216,8 @@ export function Sidebar(p: Props) {
       toast(t("err.action"), { error: true, description: errText(e) });
     });
   }, []);
+  // Among my favorites: one of them moved, or one from anywhere put there.
+  const placeFav = useCallback((id: string, target: Session, edge: Edge) => placeFavorite(id, target.id, edge), []);
   // A folder put (dragged, pinned): shown so at once, then told the server.
   const putFolder = useCallback((path: string, at: (was: Places) => { order?: number; pinned?: boolean }) => {
     const was = getCarried<Guilds>("guilds") ?? NO_GUILDS;
@@ -333,7 +348,7 @@ export function Sidebar(p: Props) {
     // A gap after what is open above; folded groups one under another stay close (the user,
     // 2026-11-08).
     const prev = ws[i - 1];
-    const apart = prev ? p.expanded(prev.key) && prev.rows.length > 0 : loose.length > 0;
+    const apart = prev ? p.expanded(prev.key) && prev.rows.length > 0 : loose.length > 0 || (favs.length > 0 && favOpen);
     // A folder of the group and its sessions; pinned ones above the sessions at the root.
     const firstRoot = roots(w)[0];
     // At a machine no longer paired: no "+" (nowhere to open it).
@@ -451,9 +466,42 @@ export function Sidebar(p: Props) {
       {p.searching && <div className="flex min-h-0 flex-1 flex-col">{p.search}</div>}
       <div ref={list} {...listDrop()} hidden={p.searching} onScroll={(e) => void (scrolled.current = e.currentTarget.scrollTop)} className="relative min-h-0 flex-1 no-bar overflow-y-auto px-2 pb-3" role="tree" aria-label={t("nav.sessions")}>
         <DropLine list={list} />
+        {/* My favorites, first (favorites.ts): there while it holds any. A session dragged from
+            anywhere onto its row goes first in it, onto one of its rows beside that one. */}
+        {favs.length > 0 && (
+          <div className="mt-1" role="group">
+            <Row
+              depth={0}
+              flip="fav"
+              head
+              expanded={favOpen}
+              onClick={() => p.toggle(FAV)}
+              icon={<Bookmark size={15} className="text-ink-2" />}
+              label={t("nav.favorites")}
+              extra={dropTarget("ws", FAV, FAV_HEAD, () => {}, { kind: "s", lane: ANY, line: dropMark({ kind: "ws", id: FAV, lane: FAV_HEAD }), edge: "bottom", drop: (d) => placeFavorite(d.id, favs[0]!.id, "top") })}
+            />
+            {favOpen &&
+              favs.map((s) => (
+                <SessionRow
+                  key={`fav:${s.id}`}
+                  s={s}
+                  depth={0}
+                  flip={`fav:${s.id}`}
+                  selected={p.selected === s.id}
+                  onSelect={p.onSelect}
+                  chatCode={p.chatCode}
+                  kidsAt={!!p.tree.kids.get(s.id)?.length || !!p.tree.runs.get(s.id)?.length}
+                  asked={asked.has(s.id)}
+                  lane={FAV}
+                  anyLane
+                  place={placeFav}
+                />
+              ))}
+          </div>
+        )}
         {/* 需要你's confirmations: lined up with the groups' folders, apart from the list as a group is. */}
         {loose.length > 0 && (
-          <div className="mt-1" role="group">
+          <div className={favs.length > 0 && favOpen ? "mt-4" : "mt-1"} role="group">
             {loose.map((c) => (
               <Row
                 key={`c:${c.id}`}
@@ -755,7 +803,7 @@ function WsRow({ flip, id, name, root, sessions, hung, machine, remote, folders,
           // Dropped on a chat: the group named there (chat.tsx), so a copy too.
           if (id) e.dataTransfer.setData(PLACE_DRAG, JSON.stringify({ path: root, name }));
           e.dataTransfer.effectAllowed = "copyMove";
-          startDrag({ kind: "ws", id: wkey, lane: "" });
+          startDrag({ kind: "ws", id: wkey, lane: "" }, e.currentTarget as HTMLElement);
         },
         onDragEnd: endDrag,
         ...dropTarget("ws", wkey, "", (d, edge) => place(d.id, wkey, edge)),
@@ -896,7 +944,7 @@ function RowFace({ s, group, solo, unread, quiet }: { s: Session; group?: { id: 
 
 /** Drawn again only as its props change, not with every draw of the list: a page of the phone's
  *  sheet turned drew every row, its menu and its tip, again (the user, 2026-11-08). */
-const SessionRow = memo(function SessionRow({ s, where, depth, flip, selected, onSelect, chatCode, kidsAt, asked, machineShown, lane, place, pinLine, pinFolder }: { s: Session; where?: string; depth: number; flip: string; selected: boolean; onSelect: (id: string) => void; chatCode: () => void; kidsAt?: boolean; asked?: boolean; machineShown?: boolean; lane?: string; place?: (id: string, target: Session, edge: Edge, lane: string) => void; pinLine?: string; pinFolder?: (path: string, lane: string) => void }) {
+const SessionRow = memo(function SessionRow({ s, where, depth, flip, selected, onSelect, chatCode, kidsAt, asked, machineShown, lane, anyLane, place, pinLine, pinFolder }: { s: Session; where?: string; depth: number; flip: string; selected: boolean; onSelect: (id: string) => void; chatCode: () => void; kidsAt?: boolean; asked?: boolean; machineShown?: boolean; lane?: string; anyLane?: boolean; place?: (id: string, target: Session, edge: Edge, lane: string) => void; pinLine?: string; pinFolder?: (path: string, lane: string) => void }) {
   useLang();
   const machines = useMachines();
   const unread = useUnread(s.id);
@@ -977,11 +1025,11 @@ const SessionRow = memo(function SessionRow({ s, where, depth, flip, selected, o
           e.dataTransfer.setData(SESSION_DRAG, s.id);
           e.dataTransfer.setData("text/plain", s.id);
           e.dataTransfer.effectAllowed = "all";
-          if (lane) startDrag({ kind: "s", id: s.id, lane });
+          if (lane) startDrag({ kind: "s", id: s.id, lane }, e.currentTarget as HTMLElement);
         },
         onDragEnd: endDrag,
         ...(lane && place
-          ? dropTarget("s", s.id, lane, (d: Dragged, edge) => place(d.id, s, edge, lane), pinLine && pinFolder ? { kind: "f", lane, line: pinLine, drop: (d) => pinFolder(d.id, lane) } : undefined)
+          ? dropTarget("s", s.id, lane, (d: Dragged, edge) => place(d.id, s, edge, lane), pinLine && pinFolder ? { kind: "f", lane, line: pinLine, drop: (d) => pinFolder(d.id, lane) } : undefined, anyLane)
           : {}),
       }
     : {};
@@ -1114,6 +1162,8 @@ export function sessionActions(s: Session, rename: () => void): { icon: ReactNod
     s.archived
       ? { icon: <ArchiveRestore size={15} />, label: t("menu.unarchive"), run: run(() => api.patch(s.id, { archived: false })) }
       : { icon: <Archive size={15} />, label: t("menu.archive"), run: run(() => api.patch(s.id, { archived: true }), t("toast.archived")) },
+    // 收藏 (favorites.ts): one not archived, or one favoured to take it off.
+    ...(!s.archived || isFavorite(s.id) ? [isFavorite(s.id) ? { icon: <BookmarkMinus size={15} />, label: t("menu.unfavorite"), run: () => setFavorite(s.id, false) } : { icon: <Bookmark size={15} />, label: t("menu.favorite"), run: () => setFavorite(s.id, true) }] : []),
     s.pinned ? { icon: <PinOff size={15} />, label: t("menu.unpin"), run: run(() => api.patch(s.id, { pinned: false })) } : { icon: <Pin size={15} />, label: t("menu.pin"), run: run(() => api.patch(s.id, { pinned: true })) },
     { icon: <Moon size={15} />, label: t(isQuiet(s.id) ? "menu.unquiet" : "menu.quiet"), run: () => setQuiet(s.id, !isQuiet(s.id)) },
     { icon: <Pencil size={15} />, label: t("menu.rename"), run: rename },
@@ -1143,7 +1193,7 @@ function FolderRow({ f, ws, depth, label, hung, open, onToggle, foldBack, newSub
           e.dataTransfer.setData("text/plain", f.path);
           e.dataTransfer.setData(PLACE_DRAG, JSON.stringify({ path: f.path, name: f.path.split("/").filter(Boolean).pop() ?? f.path }));
           e.dataTransfer.effectAllowed = "copyMove";
-          startDrag({ kind: "f", id: f.path, lane });
+          startDrag({ kind: "f", id: f.path, lane }, e.currentTarget as HTMLElement);
         },
         onDragEnd: endDrag,
         ...dropTarget("f", f.path, lane, (d, edge) => place(d.id, f, edge, lane)),

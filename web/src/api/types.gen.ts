@@ -2047,6 +2047,13 @@ export interface Memory {
   at: number /* int64 */;
 }
 /**
+ * Favorites are the channels the caller favoured (GET/PUT internal/favorites), in its order: a
+ * session's own channel is its id. Its own alone; PUT gives the whole list.
+ */
+export interface Favorites {
+  channels: string[];
+}
+/**
  * Remember is a memory to keep.
  */
 export interface Remember {

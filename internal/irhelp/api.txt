@@ -110,6 +110,8 @@ POST internal/recall {q, all?, limit?} -> RecallHit[]  what the records say of t
 POST internal/remember {text} -> {id}  keep one short note (at most 300 characters) for yourself across contexts and channels; your role's if your session is of one (shared by its sessions). Rarely: when asked to, a major piece of work done, something the user plainly cares about, a clear preference, a serious problem; once at the turn's end, with where it is from
 GET internal/memory {session?} -> Memory[]  what you chose to remember, the latest first, each with the session, channel and message number it is from  view=id,text,name,seq
 DELETE internal/memory/{id} - -> {ok}  forget one
+GET internal/favorites - -> Favorites  the channels you favoured (a session's is its id), in your order: the page lists them first; your own alone
+PUT internal/favorites {channels} -> Favorites  your favorites made this whole list (at most 200), in its order; [] none
 POST internal/roles {session | name, agent, machine?, model?, preset?, persona?, avatar?} -> Role  keep a role: from a session as it is now (its card, agent, model, preset; the session is the role's from then on), or as given; no effort or mode: those are each start's; no intro: each of its sessions writes its own; person only
 PATCH internal/roles/{id} {name?, model?, preset?, persona?, avatar?, sort?, session?} -> Role  change a role (its agent stays); session: take its card (persona, face) from that session again, not its model; person only
 DELETE internal/roles/{id} - -> {ok}  take a role away, its memory with it; its sessions stay; person only
