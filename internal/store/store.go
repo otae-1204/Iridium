@@ -3,8 +3,8 @@
 // workspaces and who belongs where, pins, colour tags, which sessions are shown, names, the queue
 // of messages to send, apps, their logins and their permissions, usage, the event outbox, and the
 // credentials, sealed (secrets.go). Never the conversations themselves, nor asks. Web Push's
-// tables (push_subscriptions, push_rules) are left from before, read by nothing (kumo,
-// 2026-11-26: Web Push is gone).
+// tables (push_subscriptions, push_rules) and public_links are left from before, read by
+// nothing (kumo, 2026-11-26: Web Push and public links are gone).
 package store
 
 import (
@@ -237,7 +237,8 @@ var schema = []string{
 	`ALTER TABLE apps ADD COLUMN agents_off TEXT NOT NULL DEFAULT '';`,
 	// 30: the login of the app an input came from (not ir_web's: its terminal is its login).
 	`ALTER TABLE inputs ADD COLUMN login TEXT NOT NULL DEFAULT '';`,
-	// 31: a session's public read-only link (publiclinks.go): the token's hash, one per session.
+	// 31: a session's public read-only link, left from before, read by nothing (kumo, 2026-11-26:
+	// public links are gone).
 	`CREATE TABLE IF NOT EXISTS public_links (
 		session    TEXT PRIMARY KEY,
 		hash       TEXT NOT NULL UNIQUE,

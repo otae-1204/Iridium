@@ -198,7 +198,6 @@ func (s *Server) newWeb(origin string) (*webapp.Web, error) {
 		OnJoin:       s.joined,
 		OnPasskey:    func(string) { s.terminalsChanged() },
 		Open:         openPath,
-		Viewer:       http.HandlerFunc(s.viewer),
 		Logger:       s.gateLog(),
 	})
 }

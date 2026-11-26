@@ -42,7 +42,7 @@ function later(): Plugin {
     transformIndexHtml: {
       order: "post",
       handler(_, { bundle, path, chunk }) {
-        if (path !== "/index.html") return []; // view.html (a public link's view) prefetches nothing
+        if (path !== "/index.html") return [];
         const files = (from: string[], into = new Set<string>()): Set<string> => {
           for (const name of from) {
             const c = bundle![name];
@@ -80,9 +80,7 @@ export default defineConfig({
     manifest: true,
     chunkSizeWarningLimit: 1024, // test/build.test.ts guards what is sent
     rolldownOptions: {
-      // The panel, and a public link's read-only view (src/view.tsx), served under /p/<token>/ with
-      // its files (internal/server/publiclink.go).
-      input: { index: `${import.meta.dirname}/index.html`, view: `${import.meta.dirname}/view.html` },
+      input: { index: `${import.meta.dirname}/index.html` },
       output: {
         // The libraries apart from our code, so an update that changes only ours keeps their files'
         // names: those of the first screen in one file, those two or more later parts share in

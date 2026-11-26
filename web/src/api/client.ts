@@ -12,7 +12,6 @@ import type {
   CompleteUpload,
   NeedAnswer,
   NeedReply,
-  PublicLink,
   Needs,
   FolderReply,
   Folders,
@@ -378,9 +377,6 @@ export const api = {
   stopTask: (id: string, task: string) => write<{ ok: boolean }>("POST", `${S(id)}/tasks/${enc(task)}/stop`),
   /** The session's public read-only link (docs/api.md "公开链接"): its state; made anew (its URL only
    *  in this answer); revoked. */
-  publicLink: (id: string) => get<PublicLink>(`${S(id)}/public`),
-  makePublicLink: (id: string) => write<PublicLink>("POST", `${S(id)}/public`),
-  revokePublicLink: (id: string) => write<{ ok: boolean }>("DELETE", `${S(id)}/public`),
   /** A command line at the session's machine, in cwd ("": its folder) (docs/api.md "命令"). */
   shell: (id: string, line: string, cwd?: string) => write<ShellStarted>("POST", `${S(id)}/shell`, { line, ...(cwd ? { cwd } : {}) } satisfies ShellRun),
   shellRead: (run: string, from: number) => get<ShellOutput>(`/v1/internal/shell/${enc(run)}?from=${from}`),

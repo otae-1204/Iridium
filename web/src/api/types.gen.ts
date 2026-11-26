@@ -2186,59 +2186,6 @@ export interface RolePatch {
 }
 
 //////////
-// source: public.go
-
-/**
- * PublicLink is GET/POST /v1/internal/sessions/{id}/public: the session's public read-only link.
- * Ready: the public address is set and the Passkey gate on, without which no link works. On: a
- * link is there. URL: the link itself, only in the answer to the POST that made it (only its
- * token's hash is kept). By: the app or login that made it; CreatedAt in ms.
- */
-export interface PublicLink {
-  ready: boolean;
-  on: boolean;
-  url?: string;
-  by?: string;
-  createdAt?: number /* int64 */;
-}
-/**
- * PublicPage is GET /p/{token}/api/messages: what was said in the session the link shows, a
- * page of it, oldest first. ?before= the page before Before's offset; ?after= what came after
- * End's. Only people's and the agent's words, credentials masked: no thinking, tools or system
- * lines. Before: "" when there is nothing earlier.
- */
-export interface PublicPage {
-  title: string;
-  agent: Agent;
-  status: Status;
-  messages: PublicMessage[];
-  before?: string;
-  end: number /* int64 */;
-}
-/**
- * PublicMessage is one thing said: by a person (Role "user"; From, the name Iridium wrote it
- * with, if any) or the agent ("agent"); its words, and the pictures it gave, each at its URL
- * under the link.
- */
-export interface PublicMessage {
-  at: string;
-  time?: number /* int64 */;
-  role: string;
-  from?: string;
-  text: string;
-  pictures?: PublicImage[];
-}
-/**
- * PublicImage is a picture of a message: its URL under the link, name and size in pixels.
- */
-export interface PublicImage {
-  url: string;
-  name?: string;
-  w?: number /* int */;
-  h?: number /* int */;
-}
-
-//////////
 // source: scripts.go
 
 /**

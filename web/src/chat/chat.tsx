@@ -4,12 +4,12 @@
 // raw session record (?record=1).
 import { Menu } from "@base-ui/react/menu";
 import { Popover } from "@base-ui/react/popover";
-import { ArrowLeft, BarChart3, Ellipsis, House, Globe, ListTree, Plus, Settings } from "lucide-react";
+import { ArrowLeft, BarChart3, Ellipsis, House, ListTree, Plus, Settings } from "lucide-react";
 import { lazy, memo, Suspense, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import { lazyAhead, useAhead } from "../prefetch";
 import type { Device, Session, SessionState as LiveSession } from "../api/types.gen";
 import { keepPreviousData } from "@tanstack/react-query";
-import { api, queryClient } from "../api/client";
+import { api } from "../api/client";
 import { useQuery } from "../api/query";
 import { AppKey, WinKeys } from "../appkey";
 import { chatOf, firstScreen, fresh, stateAhead, type Draft as Drafted } from "../chats";
@@ -36,7 +36,6 @@ import { renameOnly } from "./cmd";
 import { Crash } from "./crash";
 import { folded, foldKey } from "./fold";
 import { Draft } from "./markdown";
-import { PublicLink, publicLinkQ } from "./publiclink";
 import { sourceOf, withDevice } from "./refs";
 import { SystemPrompt } from "./context";
 import { givenOf } from "./given";
@@ -218,14 +217,13 @@ const Bar = memo(function Bar({ s, onSheet, onMe, onSide, onBack, recordOnly }: 
   const solo = soloRow && soloAgent ? { id: soloRow.session, agent: soloAgent } : undefined;
   const machines = useMachines();
   const [renaming, setRenaming] = useState(false);
-  const [publicOpen, setPublicOpen] = useState(false);
   const late = useRef(!s).current ? "g-fade" : "";
   const more = useRef<HTMLButtonElement>(null);
   const moreAhead = useAhead(ChannelMenu.ahead, []);
   const usageHere = () => openUsage(s?.machine);
   // 回到主页 (kumo, 2026-11-25): the pane with no chat open, its splash.
   const lead = [{ icon: <House size={15} />, label: t("menu.home"), run: () => go({ name: "home" }) }, { icon: <Plus size={15} />, label: t("menu.new"), run: () => s && void newChannel(groupPath(s), machines, s.workspace ?? undefined).then((id) => id && openChat(id)) }, ...(onSheet ? [{ icon: <ListTree size={15} />, label: t("nav.sidebar"), run: onSheet }] : []), ...(onMe ? [{ icon: <Settings size={15} />, label: t("nav.me"), run: onMe }] : []), { icon: <BarChart3 size={15} />, label: t("usage.title"), run: usageHere }];
-  const acts = s ? [...sessionActions(s, () => setRenaming(true)), { icon: <Globe size={15} />, label: t("public.menu"), run: () => void Promise.race([queryClient.prefetchQuery(publicLinkQ(s.id)), new Promise((r) => setTimeout(r, 300))]).then(() => setPublicOpen(true)) }] : [];
+  const acts = s ? [...sessionActions(s, () => setRenaming(true))] : [];
   return (
     <header data-app-drag className="g-turn-stay vt-bar glass absolute inset-x-0 top-0 z-20 shadow-[0_0.5px_0_var(--edge)]">
       <div className="flex h-12 items-center gap-1 pr-2 pl-2 pointer-coarse:h-13">
@@ -306,7 +304,6 @@ const Bar = memo(function Bar({ s, onSheet, onMe, onSide, onBack, recordOnly }: 
                 </Menu.Positioner>
               </MenuPortal>
             </Menu.Root>
-            <PublicLink key={`public:${s.id}`} session={s.id} anchor={more} open={publicOpen} onOpenChange={setPublicOpen} />
             <EditAt id={s.id} anchor={more} />
           </span>
         )}

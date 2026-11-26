@@ -265,7 +265,6 @@ func (s *Server) Handler(local bool) http.Handler {
 	s.updateRoutes(mux)
 	s.settingsRoutes(mux)
 	s.sessionRoutes(mux)
-	s.publicRoutes(mux)  // publiclink.go
 	s.channelRoutes(mux) // channels.go
 	s.voiceRoutes(mux)
 	mux.HandleFunc("GET /v1/internal/exec", s.execConnect)

@@ -289,28 +289,7 @@ Web Push 已删（kumo，2026-11-26）：没有 `/v1/internal/web/push/*`，配�
 
 ## 公开链接
 
-把一个会话只读地给公网上的人看：拿到链接的人看得到标题、agent 和对话里人和 agent 说的话（文字、所带图片），看不到思考、工具调用和结果、系统行；凭据照样遮掉。不能发消息，也没有别的权限。
-
-- 只在设了公网地址（Passkey 门开着）时能建、能看；关掉公网地址，已有的链接一起失效。
-- 建、撤：能用这个会话的人（主机、网页登录、应用的登录），agent 的 `ir` 不行（403）。每个会话一条，再建就换新的、旧的立即失效；撤销立即失效。
-- 库里只存令牌（32 字节随机）的哈希（表 `public_links`），链接只在建的那次回答里给一次。
-
-| 请求 | 正文 → 回答 | 说明 |
-|---|---|---|
-| `GET /v1/internal/sessions/{id}/public` | → `PublicLink` | `{ready, on, by, createdAt}`；`ready` 是公网地址开着 |
-| `POST /v1/internal/sessions/{id}/public` | → `PublicLink` | 建（或换新），带 `url`。公网地址没开 403 `not_public` |
-| `DELETE /v1/internal/sessions/{id}/public` | → `{ok}` | 撤销 |
-
-看的那一边（网页层 `Config.Viewer`，不要登录、不设 Cookie、只收 GET/HEAD、回答 private 且不带 Referer）：
-
-| 路径 | 说明 |
-|---|---|
-| `/p/<令牌>` | 页面（`web/view.html`，单独的入口，不加载面板） |
-| `/p/<令牌>/api/messages` | `PublicPage{title, agent, status, messages, before, end}`，`messages` 是 `PublicMessage{at, time, role: user\|agent, from, text, pictures}`，旧的在前；`?before=<before>` 更早一页，`?after=<end>` 之后新来的（页面看得见时每 4 秒问一次） |
-| `/p/<令牌>/files/<at>/<ref>` | 那条消息带的图片（本机的会话才有；重新编码，不收 SVG） |
-| `/p/<令牌>/assets/…`、`/p/<令牌>/theme.js` | 页面自己的文件 |
-
-令牌不对、已撤、会话没了、公网地址关了：一律 404。令牌在别的路径（API、`/v1/events`、Cookie、Bearer）上什么也打不开。
+已删除（kumo，2026-11-26）：会话的只读公开链接和 `/p/<令牌>` 页面都没有了，表 `public_links` 留着不读。`ir public`（公网地址）和 Passkey 门照旧。
 
 ## 应用的接口
 
