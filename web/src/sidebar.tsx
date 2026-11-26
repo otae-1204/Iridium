@@ -9,7 +9,7 @@
 // (colors.ts); a group's: rename, its path. The mouse resting
 // on a row fetches its chat ahead.
 import { Menu } from "@base-ui/react/menu";
-import { Archive, ArchiveRestore, ArrowDown, ArrowUp, Bot, Check, ChevronRight, Copy, Ellipsis, Ungroup, Folder, FolderOpen, ListCollapse, Moon, Pencil, Pin, PinOff, Plus, RefreshCw, Square, FolderPlus } from "lucide-react";
+import { Archive, ArchiveRestore, Bot, Check, ChevronRight, Copy, Ellipsis, Ungroup, Folder, FolderOpen, ListCollapse, Moon, Pencil, Pin, PinOff, Plus, RefreshCw, Square, FolderPlus } from "lucide-react";
 import { ConfirmIcon, confirmName, confirmTitle } from "./confirmname";
 import { Fragment, lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode, type RefObject } from "react";
 import { api } from "./api/client";
@@ -35,7 +35,7 @@ import { CloudBadge, MachineFace, shownPath, useLate, useMachine, type Machine }
 import { getCarried, setCarried, useCarried, useLink, useList } from "./store";
 import { channelLamp, isMulti } from "./chat/channel/lib";
 import { useVoiceItem, VoiceDock, VoiceMark } from "./voice/dock";
-import { dropMark, dropTarget, endDrag, listDrop, pinFolder, placeFolder, placeGroup as placeGroupKey, placeSession, sortList, startDrag, useDragged, useOver, type Dragged, type Edge, type Over } from "./reorder";
+import { dropMark, dropTarget, endDrag, listDrop, pinFolder, placeFolder, placeGroup as placeGroupKey, placeSession, sortList, startDrag, touchDrag, useDragged, useOver, type Dragged, type Edge, type Over } from "./reorder";
 
 const STEP = 18;
 /** The deepest a folder is drawn in: those deeper are drawn as deep, the sidebar being narrow. */
@@ -333,11 +333,6 @@ export function Sidebar(p: Props) {
     // 2026-11-08).
     const prev = ws[i - 1];
     const apart = prev ? p.expanded(prev.key) && prev.rows.length > 0 : loose.length > 0;
-    // The groups it moves among, at any machine (not 未归类): one up, one down, from its menu.
-    const lane = ws.filter((x) => x.id !== 0);
-    const k = lane.indexOf(w);
-    const up = k > 0 ? lane[k - 1] : undefined;
-    const down = k >= 0 ? lane[k + 1] : undefined;
     // A folder of the group and its sessions; pinned ones above the sessions at the root.
     const firstRoot = roots(w)[0];
     // At a machine no longer paired: no "+" (nowhere to open it).
@@ -401,8 +396,6 @@ export function Sidebar(p: Props) {
           newSub={w.id !== 0 && !gone(w.root) ? () => setPlusOpen(w.key) : undefined}
           wkey={w.key}
           place={placeGroup}
-          up={up && (() => placeGroup(w.key, up.key, "top"))}
-          down={down && (() => placeGroup(w.key, down.key, "bottom"))}
           // Not its count: the "+" that opens a session here, at the row's end (the user,
           // 2026-11-06), seen while the group is open or the row hovered (plusKey).
           end={
@@ -709,13 +702,15 @@ function DropLine({ list }: { list: RefObject<HTMLDivElement | null> }) {
 /** A group's row; its menu (right click, long-press): its sessions archived, as a folder's (the
  *  user, 2026-11-08: a group is a folder now), rename, its path copied, open or folded. 未归类
  *  itself (id 0): its sessions archived. */
-function WsRow({ flip, id, name, root, sessions, hung, machine, remote, folders, open, onToggle, foldBack, newSub, end, wkey, place, up, down }: { flip: string; id: number; name: string; root: string; sessions: Session[]; hung: Session[]; machine?: Machine; remote?: boolean; folders?: boolean; open: boolean; onToggle: () => void; foldBack?: () => void; newSub?: () => void; end: ReactNode; wkey: string; place: (key: string, target: string, edge: Edge) => void; up?: () => void; down?: () => void }) {
+function WsRow({ flip, id, name, root, sessions, hung, machine, remote, folders, open, onToggle, foldBack, newSub, end, wkey, place }: { flip: string; id: number; name: string; root: string; sessions: Session[]; hung: Session[]; machine?: Machine; remote?: boolean; folders?: boolean; open: boolean; onToggle: () => void; foldBack?: () => void; newSub?: () => void; end: ReactNode; wkey: string; place: (key: string, target: string, edge: Edge) => void }) {
   const machines = useMachines();
   const me = useMe().data;
   const real = id !== 0 && manages(me);
   const [at, setAt] = useMenuAt();
   const [renaming, setRenaming] = useState(false);
-  const lp = useLongPress((p) => setAt({ x: p.x, y: p.y }));
+  // Held and moved: dragged among all groups' rows, as with a mouse (reorder.ts touchDrag).
+  const movable = real && !renaming;
+  const lp = useLongPress((p) => setAt({ x: p.x, y: p.y }), { onHeldMove: movable ? (row, from, pid) => (setAt(null), touchDrag({ kind: "ws", id: wkey, lane: "" }, row, from, pid)) : undefined });
   const anchor = usePointAnchor(at);
   const failed = (e: unknown) => toast(t("err.action"), { error: true, description: errText(e) });
   // The group's voice, its way in (kumo, 2026-11-16).
@@ -734,12 +729,8 @@ function WsRow({ flip, id, name, root, sessions, hung, machine, remote, folders,
       ? [
           { icon: <Pencil size={15} />, label: t("menu.rename"), run: () => setRenaming(true) },
           { icon: <Copy size={15} />, label: t("menu.copyPath"), run: () => void navigator.clipboard.writeText(shownPath(root, machines).real).then(() => toast(t("toast.copied")), failed) },
-          { icon: open ? <Folder size={15} /> : <FolderOpen size={15} />, label: open ? t("menu.fold") : t("menu.unfold"), run: onToggle },
           // Taken apart at its folder, its subfolders groups of their own (the user, 2026-11-09).
           ...(folders ? [{ icon: <Ungroup size={15} />, label: t("menu.split"), run: () => void api.patchGuild(id, { split: true }).then(() => toast(t("toast.split", { ws: name })), failed) }] : []),
-          // Moved among all groups; with a mouse it is dragged too (reorder.ts).
-          ...(up ? [{ icon: <ArrowUp size={15} />, label: t("menu.moveUp"), run: up }] : []),
-          ...(down ? [{ icon: <ArrowDown size={15} />, label: t("menu.moveDown"), run: down }] : []),
         ]
       : []),
     // A group at a machine with dsh: what its dsh offers read again now, its workspaces and
@@ -755,9 +746,9 @@ function WsRow({ flip, id, name, root, sessions, hung, machine, remote, folders,
   const menu = items.length > 0;
   // Dragged among all groups' rows, by its key (tree.ts WsNode.key).
   const dim = useDragged("ws", wkey);
-  const dragging = real && fine() && !renaming
+  const dragging = movable
     ? {
-        draggable: true,
+        draggable: fine(),
         onDragStart: (e: React.DragEvent) => {
           e.dataTransfer.setData("text/plain", name);
           // Dropped on a chat: the group named there (chat.tsx), so a copy too.
@@ -938,7 +929,8 @@ const SessionRow = memo(function SessionRow({ s, where, depth, flip, selected, o
   const menuEver = useEver(menuAt !== null);
   const [renaming, setRenaming] = useState(false);
   const rest = useRef<number | undefined>(undefined);
-  const lp = useLongPress((p) => setMenuAt({ x: p.x, y: p.y }));
+  // Held and moved: dragged among those beside it, as with a mouse (reorder.ts touchDrag).
+  const lp = useLongPress((p) => setMenuAt({ x: p.x, y: p.y }), { onHeldMove: lane && place && !renaming ? (row, from, pid) => (setMenuAt(null), touchDrag({ kind: "s", id: s.id, lane }, row, from, pid)) : undefined });
   const hover = {
     onPointerMove: (e: React.PointerEvent) => {
       lp.onPointerMove(e);
@@ -963,9 +955,9 @@ const SessionRow = memo(function SessionRow({ s, where, depth, flip, selected, o
   // long press is the menu. Nothing changes as it is dragged (the user, 2026-11-06), but the line
   // where it goes among those beside it (reorder.ts).
   const dim = useDragged("s", s.id);
-  const drag = fine() && !renaming
+  const drag = !renaming
     ? {
-        draggable: true,
+        draggable: fine(),
         onDragStart: (e: React.DragEvent) => {
           e.dataTransfer.setData(SESSION_DRAG, s.id);
           e.dataTransfer.setData("text/plain", s.id);
@@ -1129,9 +1121,9 @@ function FolderRow({ f, depth, label, hung, open, onToggle, foldBack, newSub, pl
   // Dragged among the folders of its group (reorder.ts): the panels' and 本机's, as a group.
   const dim = useDragged("f", f.path);
   const real = manages(me);
-  const dragging = real && fine()
+  const dragging = real
     ? {
-        draggable: true,
+        draggable: fine(),
         onDragStart: (e: React.DragEvent) => {
           e.dataTransfer.setData("text/plain", f.path);
           e.dataTransfer.setData(PLACE_DRAG, JSON.stringify({ path: f.path, name: f.path.split("/").filter(Boolean).pop() ?? f.path }));
@@ -1143,7 +1135,8 @@ function FolderRow({ f, depth, label, hung, open, onToggle, foldBack, newSub, pl
       }
     : {};
   const [at, setAt] = useMenuAt();
-  const lp = useLongPress((p) => setAt({ x: p.x, y: p.y }));
+  // Held and moved: dragged among the folders of its group, as with a mouse (reorder.ts touchDrag).
+  const lp = useLongPress((p) => setAt({ x: p.x, y: p.y }), { onHeldMove: real ? (row, from, pid) => (setAt(null), touchDrag({ kind: "f", id: f.path, lane }, row, from, pid)) : undefined });
   const done = (what: string) => () => toast(what);
   const failed = (e: unknown) => toast(t("err.action"), { error: true, description: errText(e) });
   const color = useFolderColors()[f.path];
@@ -1158,7 +1151,6 @@ function FolderRow({ f, depth, label, hung, open, onToggle, foldBack, newSub, pl
     ...(foldBack ? [{ icon: <ListCollapse size={15} />, label: t("menu.foldSessions"), run: foldBack }] : []),
     ...(newSub ? [{ icon: <FolderPlus size={15} />, label: t("new.subFolder"), run: newSub }] : []),
     { icon: <Copy size={15} />, label: t("menu.copyPath"), run: () => void navigator.clipboard.writeText(shownPath(f.path, machines).real).then(done(t("toast.copied")), failed) },
-    { icon: open ? <Folder size={15} /> : <FolderOpen size={15} />, label: open ? t("menu.fold") : t("menu.unfold"), run: onToggle },
     // Pinned: above the sessions at its group's root (reorder.ts).
     ...(real ? [f.pinned ? { icon: <PinOff size={15} />, label: t("menu.unpin"), run: () => pin(f.path, false) } : { icon: <Pin size={15} />, label: t("menu.pin"), run: () => pin(f.path, true) }] : []),
   ];

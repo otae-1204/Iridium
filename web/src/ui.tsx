@@ -115,8 +115,9 @@ export function holdMenu(close: () => void) {
  *  the synthetic mouse press that comes before click. Not for a press in a portal of its children
  *  (a row's "+" popover): React may hand one pointerdown to a row twice from there, from the
  *  portal's container and from <body>, and the first timer would be lost, never cleared, opening the
- *  row's menu after a plain tap (the user, 2026-11-06). */
-export function useLongPress(onLong: (at: { x: number; y: number }) => void, { suppressTouchClick = false } = {}) {
+ *  row's menu after a plain tap (the user, 2026-11-06). onHeldMove: the finger, held, then moved
+ *  (a row dragged, reorder.ts touchDrag); till then the page is not scrolled by it. */
+export function useLongPress(onLong: (at: { x: number; y: number }) => void, { suppressTouchClick = false, onHeldMove }: { suppressTouchClick?: boolean; onHeldMove?: (row: HTMLElement, from: { x: number; y: number }, pointerId: number) => void } = {}) {
   const timer = useRef<number | undefined>(undefined);
   const fired = useRef(false);
   const start = useRef({ x: 0, y: 0 });
@@ -127,10 +128,13 @@ export function useLongPress(onLong: (at: { x: number; y: number }) => void, { s
       if (e.pointerType !== "touch" || !own(e)) return;
       clear();
       start.current = { x: e.clientX, y: e.clientY };
+      const row = e.currentTarget as HTMLElement;
+      const id = e.pointerId;
       timer.current = window.setTimeout(() => {
         fired.current = true;
         buzzHeld();
         onLong(start.current);
+        if (onHeldMove) held(row, start.current, id, onHeldMove);
       }, 450);
     },
     onPointerMove: (e: React.PointerEvent) => {
@@ -159,6 +163,28 @@ export function useLongPress(onLong: (at: { x: number; y: number }) => void, { s
       }
     },
   };
+}
+
+/** Held (the long press fired), the finger still down: the page not scrolled by it; moved past 8px,
+ *  onMove (a row dragged, reorder.ts touchDrag). Let go first: nothing. */
+function held(row: HTMLElement, from: { x: number; y: number }, id: number, onMove: (row: HTMLElement, from: { x: number; y: number }, pointerId: number) => void) {
+  const still = (e: TouchEvent) => void (e.cancelable && e.preventDefault());
+  const off = () => {
+    removeEventListener("touchmove", still);
+    removeEventListener("pointermove", move);
+    removeEventListener("pointerup", up);
+    removeEventListener("pointercancel", up);
+  };
+  const move = (e: PointerEvent) => {
+    if (e.pointerId !== id || Math.hypot(e.clientX - from.x, e.clientY - from.y) <= 8) return;
+    off();
+    onMove(row, from, id);
+  };
+  const up = (e: PointerEvent) => void (e.pointerId === id && off());
+  addEventListener("touchmove", still, { passive: false });
+  addEventListener("pointermove", move);
+  addEventListener("pointerup", up);
+  addEventListener("pointercancel", up);
 }
 
 /** A key that takes something away for good: pressed once it turns red and its name becomes

@@ -74,8 +74,6 @@ export const en: Dict = {
   "menu.newHere": "New session here",
   "menu.copyPath": "Copy path",
   "menu.fold": "Fold",
-  "menu.moveUp": "Move up",
-  "menu.moveDown": "Move down",
   "menu.unfold": "Open",
   "menu.foldSessions": "Fold sessions",
   "menu.archiveHere": "Archive the {n} sessions here",

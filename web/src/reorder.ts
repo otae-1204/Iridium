@@ -5,7 +5,8 @@
 // dropped on any of those is pinned, last of the pinned. A session or folder dragged keeps the key
 // it was dropped at (Session.order, a folder's mark in the carried "guilds") in place of its last activity: it
 // stays where it was put while those never dragged are still sorted by when they last worked.
-// With a mouse only, as a finger's long press is the menu: on a phone a group's menu moves it.
+// With a mouse it is dragged; a finger holds the row (its menu opens), then moves it (touchDrag)
+// (kumo, 2026-11-26: no 上移/下移 in a group's menu).
 import { useSyncExternalStore } from "react";
 import type { Session } from "./api/types.gen";
 import { NO_GUILDS, placesOf, useGuilds, type Places } from "./guilds";
@@ -50,37 +51,126 @@ export const useDragged = (kind: Dragged["kind"], id: string) => useSyncExternal
 /** The row's mark the list finds it by, to draw the line at: data-place. */
 export const dropMark = (d: Dragged) => `${d.kind}:${d.lane}:${d.id}`;
 
+/** A row's drop, found by its mark (data-place) under a finger (touchDrag): as it was last drawn. */
+type Target = { pick: () => "own" | "also" | null; aim: (how: "own" | "also", r: DOMRect, y: number) => Over; land: (how: "own" | "also", d: Dragged, edge: Edge) => void };
+const targets = new Map<string, Target>();
+
 /** What a row takes to be dropped on: by one of its kind and lane, not itself; also, by one of
  *  another kind (a folder on a session at its group's root). */
 export function dropTarget(kind: Dragged["kind"], id: string, lane: string, drop: (d: Dragged, edge: Edge) => void, also?: Also) {
   const at = dropMark({ kind, id, lane });
-  const pick = () => {
-    const d = dragged;
-    if (d?.kind === kind && d.lane === lane && d.id !== id) return "own";
-    if (also && d?.kind === also.kind && d.lane === also.lane) return "also";
-    return null;
+  const t: Target = {
+    pick: () => {
+      const d = dragged;
+      if (d?.kind === kind && d.lane === lane && d.id !== id) return "own";
+      if (also && d?.kind === also.kind && d.lane === also.lane) return "also";
+      return null;
+    },
+    aim: (how, r, y) => (how === "also" ? { at, line: also!.line, edge: "top" } : { at, line: at, edge: y < r.top + r.height / 2 ? "top" : "bottom" }),
+    land: (how, d, edge) => (how === "also" ? also!.drop(d) : drop(d, edge)),
   };
+  targets.set(at, t);
   return {
     "data-place": at,
     onDragOver: (e: React.DragEvent<HTMLElement>) => {
-      const how = pick();
+      const how = t.pick();
       if (!how) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = "move";
-      const r = e.currentTarget.getBoundingClientRect();
-      setOver(how === "also" ? { at, line: also!.line, edge: "top" } : { at, line: at, edge: e.clientY < r.top + r.height / 2 ? "top" : "bottom" });
+      setOver(t.aim(how, e.currentTarget.getBoundingClientRect(), e.clientY));
     },
     onDrop: (e: React.DragEvent<HTMLElement>) => {
-      const how = pick();
+      const how = t.pick();
       if (!how || over?.at !== at) return;
       e.preventDefault();
       const d = dragged!;
       const edge = over.edge;
       endDrag();
-      if (how === "also") also!.drop(d);
-      else drop(d, edge);
+      t.land(how, d, edge);
     },
   };
+}
+
+/** The nearest box above el that scrolls up and down (the sidebar's list). */
+function scroller(el: HTMLElement): HTMLElement | null {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const o = getComputedStyle(p).overflowY;
+    if ((o === "auto" || o === "scroll") && p.scrollHeight > p.clientHeight) return p;
+  }
+  return null;
+}
+
+/** A finger's drag: row held (its menu opened, ui.tsx useLongPress), then moved. The row's copy
+ *  goes with the finger, just above it (the line where it would land drawn under it, as a mouse's is), the list scrolled
+ *  near its top or foot; let go over a row that takes it, it lands there as a mouse's drop. */
+export function touchDrag(d: Dragged, row: HTMLElement, from: { x: number; y: number }, pointerId: number) {
+  startDrag(d);
+  const r = row.getBoundingClientRect();
+  const ghost = row.cloneNode(true) as HTMLElement;
+  ghost.removeAttribute("data-place");
+  ghost.setAttribute("aria-hidden", "true");
+  Object.assign(ghost.style, {
+    position: "fixed",
+    left: `${r.left}px`,
+    top: `${r.top}px`,
+    width: `${r.width}px`,
+    height: `${r.height}px`,
+    margin: "0",
+    pointerEvents: "none",
+    zIndex: "60",
+    borderRadius: "8px",
+    background: "var(--paper)",
+    boxShadow: "var(--shadow-float)",
+  });
+  document.body.append(ghost);
+  const list = scroller(row);
+  let x = from.x;
+  let y = from.y;
+  const hit = () => {
+    ghost.style.transform = `translateY(${y - r.bottom - 16}px)`;
+    const el = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-place]");
+    const t = el && targets.get(el.dataset.place!);
+    const how = t?.pick();
+    setOver(t && how ? t.aim(how, el.getBoundingClientRect(), y) : null);
+  };
+  let frame = requestAnimationFrame(function tick() {
+    if (list) {
+      const b = list.getBoundingClientRect();
+      const edge = Math.min(56, b.height / 4);
+      const v = y < b.top + edge ? -(b.top + edge - y) / 3 : y > b.bottom - edge ? (y - b.bottom + edge) / 3 : 0;
+      const was = list.scrollTop;
+      if (v) list.scrollTop += v;
+      if (list.scrollTop !== was) hit();
+    }
+    frame = requestAnimationFrame(tick);
+  });
+  const move = (e: PointerEvent) => {
+    if (e.pointerId !== pointerId) return;
+    x = e.clientX;
+    y = e.clientY;
+    hit();
+  };
+  // The page not scrolled by the finger while it drags.
+  const still = (e: TouchEvent) => void (e.cancelable && e.preventDefault());
+  const end = (e: PointerEvent) => {
+    if (e.pointerId !== pointerId) return;
+    cancelAnimationFrame(frame);
+    ghost.remove();
+    removeEventListener("pointermove", move);
+    removeEventListener("pointerup", end);
+    removeEventListener("pointercancel", end);
+    removeEventListener("touchmove", still);
+    const o = over;
+    const t = o && targets.get(o.at);
+    const how = e.type === "pointerup" ? t?.pick() : null;
+    endDrag();
+    if (o && t && how) t.land(how, d, o.edge);
+  };
+  addEventListener("pointermove", move);
+  addEventListener("pointerup", end);
+  addEventListener("pointercancel", end);
+  addEventListener("touchmove", still, { passive: false });
+  hit();
 }
 
 /** What a session is sorted by: where it was dragged to, else its last activity (as the server's
