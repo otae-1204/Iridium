@@ -133,9 +133,12 @@ export function slicer(E: Env) {
     }
   };
 
+  // Fruit many, what is not to be cut few (kumo, 2026-11-26): at most one of those a volley.
+  let bombOk = true;
   const toss = () => {
-    const W = E.W(), top = E.top(), bot = E.bottom(), isBomb = !!bomb && score > 1 && Math.random() < 0.26;
+    const W = E.W(), top = E.top(), bot = E.bottom(), isBomb = bombOk && !!bomb && score > 3 && Math.random() < 0.08;
     const from = marks.length && Math.random() < 0.22 ? marks : faces;
+    if (isBomb) bombOk = false;
     const s = isBomb ? bomb! : from[(Math.random() * from.length) | 0];
     if (!s) return;
     // Each in a way of its own (kumo, 2026-11-26: one over another, in characters, they cannot be
@@ -223,9 +226,11 @@ export function slicer(E: Env) {
         // A few at a time (kumo, 2026-11-26: more of them), more as the count grows.
         // Larger as they are now, the going is made up for it (kumo, 2026-11-26): later on they
         // come a good deal thicker, and what is not to be cut a little oftener.
-        const n = 1 + (Math.random() < 0.55 ? 1 : 0) + (score > 6 && Math.random() < 0.5 ? 1 : 0) + (score > 14 && Math.random() < 0.5 ? 1 : 0) + (score > 26 && Math.random() < 0.5 ? 1 : 0);
+        // Twice as many again (kumo, 2026-11-26: a great deal more fruit), and sooner after each other.
+        const n = 2 + (Math.random() < 0.7 ? 1 : 0) + (Math.random() < 0.4 ? 1 : 0) + (score > 6 && Math.random() < 0.6 ? 1 : 0) + (score > 14 && Math.random() < 0.6 ? 1 : 0) + (score > 26 && Math.random() < 0.6 ? 2 : 0);
+        bombOk = true;
         for (let j = 0; j < n; j++) toss();
-        next = T + Math.max(360, 1200 - score * 24) * (0.8 + Math.random() * 0.4);
+        next = T + Math.max(300, 950 - score * 20) * (0.8 + Math.random() * 0.4);
       }
       for (let i = things.length - 1; i >= 0; i--) {
         const q = things[i]!;
