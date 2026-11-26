@@ -96,6 +96,13 @@ type Memory struct {
 // session's own channel is its id. Its own alone; PUT gives the whole list.
 type Favorites struct {
 	Channels []string `json:"channels"`
+	// Color: the colour tag of the favorites' folder, the caller's own (PATCH); none: untagged.
+	Color Color `json:"color,omitempty"`
+}
+
+// FavoritesPatch changes the caller's favorites' colour tag ("" takes it off).
+type FavoritesPatch struct {
+	Color *Color `json:"color,omitempty"`
 }
 
 // Remember is a memory to keep.

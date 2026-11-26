@@ -5,6 +5,7 @@
 // person to every device (internal/server/favorites.go); another's changes nothing of mine.
 import { useEffect, useSyncExternalStore } from "react";
 import { api, missing, queryClient } from "./api/client";
+import type { Color, Favorites } from "./api/types.gen";
 import { useQuery } from "./api/query";
 import { t } from "./i18n";
 import { useCarried } from "./store";
@@ -24,8 +25,9 @@ const subs = new Set<() => void>();
 const emit = () => subs.forEach((f) => f());
 const subscribe = (f: () => void) => (subs.add(f), () => void subs.delete(f));
 const NONE: string[] = [];
+const EMPTY: Favorites = { channels: NONE };
 
-const favQ = { queryKey: KEY, queryFn: () => api.favorites().then((f) => f.channels ?? NONE).catch((e) => (missing(e) ? NONE : Promise.reject(e))), staleTime: 30_000 };
+const favQ = { queryKey: KEY, queryFn: () => api.favorites().catch((e) => (missing(e) ? EMPTY : Promise.reject(e))), staleTime: 30_000 };
 
 /** My favorites, by channel id, in my order. */
 export function useFavorites(): string[] {
@@ -38,10 +40,27 @@ export function useFavorites(): string[] {
   }, [v]);
   const q = useQuery(favQ, queryClient);
   const local = useSyncExternalStore(subscribe, () => mine);
-  return local ?? q.data ?? NONE;
+  return local ?? q.data?.channels ?? NONE;
 }
 
-const now = () => mine ?? queryClient.getQueryData<string[]>(KEY) ?? NONE;
+/** My favorites' colour tag (the folder's icon tinted), mine alone. */
+export const useFavoritesColor = (): Color | undefined => useQuery(favQ, queryClient).data?.color || undefined;
+
+/** Tags my favorites with c ("" takes it off): drawn so at once, then patched; failed, as it was. */
+export function setFavoritesColor(c: Color | "") {
+  const was = queryClient.getQueryData<Favorites>(KEY) ?? EMPTY;
+  void queryClient.cancelQueries({ queryKey: KEY });
+  queryClient.setQueryData<Favorites>(KEY, { ...was, color: c || undefined });
+  void api.patchFavorites({ color: c as Color }).then(
+    (f) => queryClient.setQueryData(KEY, f),
+    (e: unknown) => {
+      queryClient.setQueryData(KEY, was);
+      toast(t("err.action"), { error: true, description: errText(e) });
+    },
+  );
+}
+
+const now = () => mine ?? queryClient.getQueryData<Favorites>(KEY)?.channels ?? NONE;
 
 /** Makes my favorites list: drawn so at once, then put; what the server says back goes into the
  *  cache before the local list gives way to it, so the list never steps back. A failed put: as it was. */
@@ -52,7 +71,7 @@ function put(list: string[]) {
   queue = queue.then(() =>
     api.putFavorites(list).then(
       (f) => {
-        queryClient.setQueryData(KEY, f.channels ?? NONE);
+        queryClient.setQueryData(KEY, f);
         if (mine === list) (mine = null), emit();
       },
       (e: unknown) => {

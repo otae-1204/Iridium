@@ -53,6 +53,6 @@ describe("favorites", () => {
     await act(async () => void (await new Promise((r) => setTimeout(r, 80))));
     expect(seen.at(-1)).toBe(0);
     expect(seen.slice(seen.indexOf(0))).not.toContain(1);
-    expect(queryClient.getQueryData(["favorites"])).toEqual([]);
+    expect(queryClient.getQueryData(["favorites"])).toEqual({ channels: [] });
   });
 });
