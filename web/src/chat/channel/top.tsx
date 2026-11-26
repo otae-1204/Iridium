@@ -116,10 +116,10 @@ export function TopRight({ id }: { id: string }) {
       {/* Each kind's models asked for once idle and as the key is pointed at, pressed or opened,
           for 邀请's menus to pop at once (pick.tsx). */}
       <Menu.Root open={listOpen} onOpenChange={(open) => (setListOpen(open), open ? ahead() : setInviteFirst(false))}>
-        <Tip label={t("channel.members")} side="bottom">
+        <Tip label={t("channel.ready")} side="bottom">
           <Menu.Trigger
             render={
-              <button ref={key} type="button" aria-label={t("channel.members")} {...keyAhead} className="g-press flex h-8 items-center gap-1 rounded-md px-2 text-ink-2 hover:bg-fill hover:text-ink data-popup-open:bg-fill pointer-coarse:h-10">
+              <button ref={key} type="button" aria-label={t("channel.ready")} {...keyAhead} className="g-press flex h-8 items-center gap-1 rounded-md px-2 text-ink-2 hover:bg-fill hover:text-ink data-popup-open:bg-fill pointer-coarse:h-10">
                 {/* Who is looking, their faces in place of the icon and how many they are: one key,
                     not two side by side; the members' count said nothing (kumo, 2026-11-25). The
                     names at the menu's head. */}
