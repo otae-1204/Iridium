@@ -71,6 +71,7 @@ function showDownload(d: Download) {
       toast(t("app.downloading"), {
         description: d.name,
         mark: "busy",
+        file: true,
         timeout: 0,
       }),
     );
@@ -88,14 +89,14 @@ function showDownload(d: Download) {
     title: string;
     description: string;
     timeout: number;
-    data: { mark?: "download"; error?: boolean };
+    data: { mark?: "download"; error?: boolean; file?: boolean };
   } =
     d.state === "done"
       ? {
           title: t("app.downloaded"),
           description: d.name,
           timeout: 2500,
-          data: { mark: "download" as const },
+          data: { mark: "download" as const, file: true },
         }
       : {
           title: t("app.downloadFailed"),
