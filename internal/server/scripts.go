@@ -641,7 +641,7 @@ func (s *Server) scriptSay(x store.Script, text string, lk link, quote int64, ca
 	list, _ := s.agentsOf(ch)
 	who := deliver.From{Member: scriptMember(x.Name), Quiet: true}
 	wake, _, _, limit := s.wakes(text, who, lk, list)
-	if limit > 0 {
+	if limit != 0 {
 		s.stopped(ch, seq, limit, lk.origin)
 		return seq, nil
 	}
@@ -660,7 +660,7 @@ func (s *Server) scriptSay(x store.Script, text string, lk link, quote int64, ca
 		go func(t string) {
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
-			if _, err := s.deliverTo(ctx, ch, t, seq, text, "", from, nil, reach(who, lk)); err != nil {
+			if _, err := s.deliverTo(ctx, ch, t, seq, text, "", from, nil, s.chain.reach(who, lk)); err != nil {
 				s.logf("server: script %s of %s: message %d to %s: %v", x.Name, ch, seq, t, err)
 			}
 		}(t)
@@ -745,8 +745,12 @@ func (s *Server) heard(ch string, seq int64, text, member, name string, lk link)
 		}
 	}
 	// Past the limit, an agent's words set no script off: the channel says so.
-	if len(due) > 0 && passes(deliver.From{Member: member, Session: sessionOfMember(member)}) && lk.hop >= deliver.MaxHops {
-		s.stopped(ch, seq, deliver.MaxHops, lk.origin)
+	if len(due) > 0 && passes(deliver.From{Member: member, Session: sessionOfMember(member)}) && (lk.hop >= deliver.MaxHops || lk.idle >= deliver.MaxIdle) {
+		limit := deliver.MaxHops
+		if lk.hop < deliver.MaxHops {
+			limit = -deliver.MaxIdle
+		}
+		s.stopped(ch, seq, limit, lk.origin)
 		return
 	}
 	for _, f := range due {

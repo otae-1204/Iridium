@@ -351,6 +351,20 @@ func (s *Server) use(h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// stopping lets h stop session {id}'s turn for a caller that may use it, or for the agent of a
+// session in a channel with it: one agent here stops another going round or off track (kumo,
+// 2026-11-26), what it may not otherwise touch.
+func (s *Server) stopping(h http.HandlerFunc) http.HandlerFunc {
+	use := s.use(h)
+	return func(w http.ResponseWriter, r *http.Request) {
+		if c := callerOf(r); s.peers(c.session, r.PathValue("id")) {
+			h(w, r)
+			return
+		}
+		use(w, r)
+	}
+}
+
 // manages lets h through for panels and 本机 only.
 func (s *Server) manages(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

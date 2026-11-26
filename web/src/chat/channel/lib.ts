@@ -40,7 +40,7 @@ export type Work = { steps: number; running: boolean; tool?: string; at?: number
  *  changed: member's, by nick, or the channel's own with no member; what: the fields, "name",
  *  "nick", "persona", "avatar"; older lines "intro", "background" too, not drawn). by: who did it, by
  *  name (the host's as Iridium, however it was kept: 主机 before 2026-11-15). */
-export type ChEvent = { type: string; member?: string; nick?: string; name?: string; from?: string; recv?: string[] | string; on?: Trigger[]; added?: string[]; removed?: string[]; everyone?: boolean; seq?: number; reason?: string; by?: string; what?: string[] };
+export type ChEvent = { type: string; member?: string; nick?: string; name?: string; from?: string; recv?: string[] | string; on?: Trigger[]; added?: string[]; removed?: string[]; everyone?: boolean; seq?: number; count?: number; reason?: string; by?: string; what?: string[] };
 
 /** A piece of an event's line: words, an agent by its nick, people by their member strings, a
  *  receive set (named as the page names its entries). */

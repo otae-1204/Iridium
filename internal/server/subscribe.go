@@ -144,7 +144,7 @@ func (s *Server) eventWakes(ch string, seq int64, ev *channel.Event, text string
 			}
 			continue
 		}
-		go s.wakeFor(ch, a.Session, seq, text+s.onText(texts), reach(who, lk))
+		go s.wakeFor(ch, a.Session, seq, text+s.onText(texts), s.chain.reach(who, lk))
 	}
 }
 

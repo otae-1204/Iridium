@@ -94,10 +94,11 @@ type Server struct {
 	bin     *joinscript.Binaries
 	binOnce sync.Once
 
-	files *files.Service   // routes_files.go
-	sat   *satori.Service  // /v1/: Satori with ir (satori.go)
-	ch    *channel.Service // what is said in the channels (docs/channels.md)
-	chain chains           // each channel's run of agents passing messages on (channels.go)
+	files  *files.Service   // routes_files.go
+	sat    *satori.Service  // /v1/: Satori with ir (satori.go)
+	ch     *channel.Service // what is said in the channels (docs/channels.md)
+	chain  chains           // each channel's run of agents passing messages on (channels.go)
+	goneOn goOns            // the paused messages a person went on with (channels.go goOn)
 
 	viewers viewers // who is looking at each channel now (channels.go)
 	dms     dms     // the channels that are two people's (channels.go)
@@ -192,6 +193,8 @@ func New(cfg config.Config, m *session.Manager, h *hub.Hub, logf func(string, ..
 	s.sat.Keep(satoriKeeper{s.st})
 	m.Watch(s.sat.Notice)
 	m.Watch(s.faceFollows)
+	// Each agent turn's tools counted: turns of words alone passed on are paused (deliver.MaxIdle).
+	m.Watch(s.chain.saw)
 	lctx, lstop := context.WithCancel(context.Background())
 	s.stopList = lstop
 	go s.watchList(lctx)
@@ -243,7 +246,7 @@ func (s *Server) Handler(local bool) http.Handler {
 	mux.HandleFunc("GET /v1/internal/sessions/{id}", s.masked(s.get))
 	mux.HandleFunc("GET /v1/internal/sessions/{id}/first", s.first)
 	mux.HandleFunc("GET /v1/internal/sessions/{id}/image", s.image)
-	mux.HandleFunc("POST /v1/internal/sessions/{id}/interrupt", s.use(s.interrupt))
+	mux.HandleFunc("POST /v1/internal/sessions/{id}/interrupt", s.stopping(s.interrupt))
 	mux.HandleFunc("POST /v1/internal/sessions/{id}/stop", s.use(s.stop))
 	mux.HandleFunc("POST /v1/internal/sessions/{id}/manual", s.use(s.askManual)) // manual.go
 	mux.HandleFunc("GET /v1/internal/sessions/{id}/manual", s.use(s.manualState))

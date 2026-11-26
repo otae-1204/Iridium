@@ -10,7 +10,7 @@
 import { flushSync } from "react-dom";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { Popover } from "@base-ui/react/popover";
-import { api } from "../../api/client";
+import { api, ApiError } from "../../api/client";
 import type { Ask, Block, ChannelReads, Reader, SessionState as LiveSession, Session } from "../../api/types.gen";
 import { firstScreen, fresh, freshState, isWhole, stateAhead, type Sent } from "../../chats";
 import { LOCAL_ME, useApps, useMe, useWhoList, useWorkspaces } from "../../data";
@@ -20,7 +20,7 @@ import { openChat, openUsage } from "../../route";
 import { PULL } from "../../sheet";
 import { getCarried, onCarried, setCarried, useCarried, useConfirms, useList, useSession } from "../../store";
 import { also, carries, events, opened, type SatoriEvent } from "../../stream";
-import { errText } from "../../toast";
+import { errText, toast } from "../../toast";
 import { agentName, cn, lampOf, PopSurface, ServerFace } from "../../ui";
 import { useSecret } from "../../secrets";
 import { Asks } from "../asks";
@@ -692,7 +692,7 @@ export const GroupView = memo(function GroupView({ g, channel, agents, who, reco
   const list = useList();
   const a = g.author;
   const msgs = g.lines.flatMap((l) => (l.m ? [l.m] : []));
-  if (a?.kind === "iridium") return <EventLines msgs={msgs} channel={channel} />;
+  if (a?.kind === "iridium") return <EventLines msgs={msgs} channel={channel} may={may} />;
   if (!a || a.kind === "person")
     return (
       <div className="flex flex-col gap-1.5">
@@ -893,7 +893,7 @@ const EVENTS_SHOWN = 3;
 /** Iridium's lines one after another: those of one kind (joined, removed) as one line; more than
  *  EVENTS_SHOWN, the first under one line that says how many, opened as it is pressed (kumo,
  *  2026-11-26). */
-function EventLines({ msgs, channel }: { msgs: Msg[]; channel: string }) {
+function EventLines({ msgs, channel, may }: { msgs: Msg[]; channel: string; may?: boolean }) {
   const [open, setOpen] = useState(false);
   const runs: Msg[][] = [];
   for (const m of msgs) {
@@ -901,7 +901,7 @@ function EventLines({ msgs, channel }: { msgs: Msg[]; channel: string }) {
     if (r && k && MERGED.has(k) && r[0]!.event?.type === k && m.event?.nick) r.push(m);
     else runs.push([m]);
   }
-  const line = (r: Msg[]) => <EventLine key={r[0]!.n} m={r[0]!} also={r.slice(1)} channel={channel} />;
+  const line = (r: Msg[]) => (r[0]!.event?.type === "stopped" && r[0]!.event.count ? <PausedLine key={r[0]!.n} m={r[0]!} channel={channel} may={may} /> : r[0]!.event?.type === "resumed" ? <Line key={r[0]!.n}>{t("channel.event.resumed", { by: r[0]!.event.by ?? "", seq: r[0]!.event.seq ?? "" })}</Line> : <EventLine key={r[0]!.n} m={r[0]!} also={r.slice(1)} channel={channel} />);
   if (runs.length <= EVENTS_SHOWN) return <div className="flex flex-col">{runs.map(line)}</div>;
   const hid = runs.slice(0, runs.length - (EVENTS_SHOWN - 1));
   // Opened: its height not glided (docs/动画.md 4: the conversation's scroll keeps what is seen).
@@ -917,6 +917,29 @@ function EventLines({ msgs, channel }: { msgs: Msg[]; channel: string }) {
       {runs.slice(hid.length).map(line)}
     </div>
   );
+}
+
+/** Agents passing a message on paused (internal/server stopped: MaxHops in a row, or MaxIdle
+ *  turns of words alone; kumo, 2026-11-26), and 继续 for one of its people: the count begins
+ *  anew and the message is passed on, once (one gone on with already: the key goes). */
+function PausedLine({ m, channel, may }: { m: Msg; channel: string; may?: boolean }) {
+  useLang();
+  const [state, setState] = useState<"" | "going" | "done">("");
+  const e = m.event!;
+  const words = t(e.reason === "idle" ? "channel.event.pausedIdle" : "channel.event.paused", { n: e.count ?? 0, seq: e.seq ?? "" });
+  const go = () => {
+    setState("going");
+    api.goOn(channel, e.seq ?? 0).then(
+      () => setState("done"),
+      (err) => (setState("done"), err instanceof ApiError && err.status === 409 ? undefined : toast(errText(err), { error: true })),
+    );
+  };
+  const key = may && state !== "done" && (
+    <button type="button" disabled={state === "going"} onClick={go} className="g-press shrink-0 rounded-sm px-1 font-medium text-ink-2 hover:text-ink disabled:opacity-50">
+      {t("channel.goOn")}
+    </button>
+  );
+  return <Line tail={key || undefined}>{words}</Line>;
 }
 
 /** A line of Iridium's own: what happened to the channel (who joined, left, was renamed, what one

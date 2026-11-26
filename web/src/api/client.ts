@@ -329,6 +329,8 @@ export const api = {
   /** How far each member has read the channel; read: this login has read it up to message seq. */
   reads: (id: string) => get<ChannelReads>(`/v1/internal/channels/${enc(id)}/reads`),
   read: (id: string, seq: number) => write<ChannelReads>("POST", `/v1/internal/channels/${enc(id)}/read`, { seq }),
+  /** Go on where agents passing message seq on were paused (已暂停): the count begins anew. */
+  goOn: (id: string, seq: number) => write<{ ok: boolean }>("POST", `/v1/internal/channels/${enc(id)}/continue`, { seq }),
   /** A channel's people set ("*" everyone, "<app>/*", "<app>/<login>"); the caller stays one. */
   setPeople: (id: string, people: string[]) => write<ChannelMembers>("PUT", `/v1/internal/channels/${enc(id)}/people`, { people }),
   /** The channel of the caller and the login whose Satori user id user is ("local": the host's):

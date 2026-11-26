@@ -128,7 +128,7 @@ func TestFires(t *testing.T) {
 	if _, ok := Fires(cmd, "agent:z", "/standup"); ok {
 		t.Fatal("an agent's words are no command")
 	}
-	if MaxHops != 4 {
-		t.Fatal(MaxHops)
+	if MaxHops != 30 || MaxIdle != 4 {
+		t.Fatal(MaxHops, MaxIdle)
 	}
 }

@@ -11,8 +11,10 @@ import (
 
 	"github.com/kumoSleeping/iridium/internal/api"
 	"github.com/kumoSleeping/iridium/internal/channel"
+	"github.com/kumoSleeping/iridium/internal/deliver"
 	"github.com/kumoSleeping/iridium/internal/gate"
 	"github.com/kumoSleeping/iridium/internal/satori"
+	"github.com/kumoSleeping/iridium/internal/session"
 )
 
 // An agent woken in a channel acts for whoever woke it: its ir has that login's rights, not
@@ -254,7 +256,7 @@ func TestChannelRelayStopped(t *testing.T) {
 		t.Fatalf("send: %d %+v", code, r)
 	}
 	l.want(200, "web", "PATCH", "/v1/internal/channels/"+ch+"/members/agent:"+ch, api.MemberPatch{Nick: &helper}, nil)
-	all := l.waitSaid("web", ch, "iridium", "未转交 #")
+	all := l.waitSaid("web", ch, "iridium", "已暂停 #")
 	time.Sleep(300 * time.Millisecond)
 	all = l.said("web", ch)
 	var stoppedAt string
@@ -262,8 +264,8 @@ func TestChannelRelayStopped(t *testing.T) {
 		if strings.Contains(m, "被叫起") {
 			t.Errorf("a reply that was said is told as none: %s", m)
 		}
-		if _, rest, ok := strings.Cut(m, "未转交 #"); ok {
-			stoppedAt, _, _ = strings.Cut(rest, "：")
+		if _, rest, ok := strings.Cut(m, "已暂停 #"); ok {
+			stoppedAt = strings.TrimSpace(rest)
 		}
 	}
 	// The message not passed on is there, said for the second agent (the fifth in the row).
@@ -276,6 +278,27 @@ func TestChannelRelayStopped(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("the reply not passed on (#%s) is not in the channel:\n%s", stoppedAt, strings.Join(all, "\n"))
+	}
+	// A person goes on (继续): said so, once; an agent may not.
+	var seq int64
+	fmt.Sscan(stoppedAt, &seq)
+	l.want(403, "agent-in:"+second, "POST", "/v1/internal/channels/"+ch+"/continue", api.Read{Seq: seq}, nil)
+	l.want(200, "web", "POST", "/v1/internal/channels/"+ch+"/continue", api.Read{Seq: seq}, nil)
+	l.waitSaid("web", ch, "iridium", fmt.Sprintf("已继续 #%d", seq))
+	l.want(409, "web", "POST", "/v1/internal/channels/"+ch+"/continue", api.Read{Seq: seq}, nil)
+}
+
+// An agent stops another agent's turn in a channel they are both in, naming it by its nick.
+func TestInterruptPeerByNick(t *testing.T) {
+	t.Parallel()
+	l, ch, second := two(t)
+	l.want(200, "agent-in:"+second, "POST", "/v1/internal/sessions/claude/interrupt", nil, nil)
+	l.want(200, "agent-in:"+second, "POST", "/v1/internal/sessions/@claude/interrupt", nil, nil)
+	if id := l.s.peerByNick(caller{session: second}, "claude"); id != ch {
+		t.Errorf("claude is %q, not the channel's agent %s", id, ch)
+	}
+	if id := l.s.peerByNick(caller{session: second}, "nobody"); id != "" {
+		t.Errorf("nobody is %q", id)
 	}
 }
 
@@ -298,6 +321,19 @@ func TestChainsByChannel(t *testing.T) {
 	next := c.person("ch1", "you")
 	if got := c.of("ch1", "a"); got.hop != 0 || got.origin != "you" || got.epoch != next.epoch {
 		t.Errorf("after a person spoke: %+v", got)
+	}
+	// Turns of words alone count as idle, one with a tool called begins that anew.
+	from := deliver.From{Session: "a"}
+	if got := c.reach(from, link{hop: 2, idle: 2}); got.hop != 3 || got.idle != 3 {
+		t.Errorf("words alone: %+v", got)
+	}
+	c.saw(session.Notice{Kind: session.NoticeTool, Session: "a"})
+	if got := c.reach(from, link{hop: 2, idle: 2}); got.hop != 3 || got.idle != 0 {
+		t.Errorf("a tool called: %+v", got)
+	}
+	c.saw(session.Notice{Kind: session.NoticeTurnStart, Session: "a"})
+	if got := c.reach(from, link{hop: 2, idle: 2}); got.idle != 3 {
+		t.Errorf("a new turn, no tool yet: %+v", got)
 	}
 	// What was on its way as the person spoke belongs to the run that is over.
 	c.pass("ch1", "a", link{epoch: lk.epoch, hop: 4})

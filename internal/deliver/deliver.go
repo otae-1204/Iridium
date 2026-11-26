@@ -11,9 +11,15 @@ import (
 )
 
 // MaxHops is how many times in a row agents (and the scripts they set off) may wake one another
-// since a person last spoke, by naming or by a subscription alike (kumo, 2026-11-23; 8 from
-// 2026-11-17).
-const MaxHops = 4
+// since a person last spoke, by naming or by a subscription alike: a backstop, far past what
+// work handed on among agents comes to, with a person away (kumo, 2026-11-26; 4 from 2026-11-23,
+// which stopped a run of work one led). Reached, the channel says it is paused and a person may
+// go on (继续).
+const MaxHops = 30
+
+// MaxIdle is how many times in a row agents may wake one another with turns of words alone, no
+// tool called: talk going round (thanks back and forth, asking again), paused as MaxHops is.
+const MaxIdle = 4
 
 // Agent is an agent of the channel: the session it is, the nick it is called by, and its
 // subscriptions (On): what of the messages that name nobody wakes it (Fires).
