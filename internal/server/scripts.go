@@ -712,6 +712,12 @@ func (s *Server) heard(ch string, seq int64, text, member, name string, lk link)
 	if strings.HasPrefix(member, scriptMemberPrefix) {
 		return
 	}
+	// An agent's words setting a script off are one more on the run, as waking an agent is: its
+	// turn of words alone counted idle too (deliver.MaxIdle), else a script and an agent waking
+	// each other never came to it.
+	if sess := sessionOfMember(member); sess != "" {
+		lk = s.chain.reach(deliver.From{Member: member, Session: sess}, lk)
+	}
 	xs, err := s.st.Scripts(ch)
 	if err != nil || len(xs) == 0 {
 		return
