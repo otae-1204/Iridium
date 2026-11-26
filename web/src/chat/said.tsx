@@ -59,13 +59,13 @@ export const clock = (ms?: number) => {
 
 /** When a message was said, on its head's inner side (beside the name, toward the middle; kumo,
  *  2026-11-16), its number in the channel before it (n; kumo, 2026-11-26): not shown till a
- *  pointer is over its row (WhenRow), or a finger presses the row's blank, which shows it till
- *  pressed again. Its place is kept: showing it moves nothing. lead: the head of a run of several
+ *  pointer is over its row (WhenRow), or a finger presses the row's blank (where there is no
+ *  hover), which shows it till pressed again: a line of a run, its own alone (pressWhen). Its place is kept: showing it moves nothing. lead: the head of a run of several
  *  messages (an agent's): shown over the head or the first message alone ([data-lead]), each
  *  other one with its own (Gutter). */
 export const When = ({ time, n, lead }: { time?: number; n?: number; lead?: boolean }) =>
   time ? (
-    <span className={cn("shrink-0 text-xs leading-4 text-ink-4 tabular-nums opacity-0 transition-opacity duration-(--dur-2) group-data-[when]/msg:opacity-100", lead ? "group-has-[[data-lead]:hover]/msg:opacity-100" : "group-hover/msg:opacity-100")}>
+    <span className={cn("shrink-0 text-xs leading-4 text-ink-4 tabular-nums opacity-0 transition-opacity duration-(--dur-2) group-data-[when]/msg:opacity-100", lead ? "group-has-[[data-lead]:hover]/msg:opacity-100 group-has-[[data-lead][data-when]]/msg:opacity-100" : "group-hover/msg:opacity-100")}>
       {n !== undefined ? `#${n} ${clock(time)}` : clock(time)}
     </span>
   ) : null;
@@ -77,9 +77,10 @@ export const When = ({ time, n, lead }: { time?: number; n?: number; lead?: bool
  *  that place itself (a sender's row of its own, group/msg), not beside it. */
 export const Gutter = ({ time, n, right, slot }: { time?: number; n?: number; right?: boolean; slot?: boolean }) =>
   time || n !== undefined ? (
-    <span aria-hidden className={cn("pointer-events-none absolute top-0.5 flex w-7 flex-col text-[11px] leading-4 whitespace-nowrap text-ink-4 tabular-nums opacity-0 transition-opacity duration-(--dur-2) group-data-[when]/msg:opacity-100", slot ? "group-hover/msg:opacity-100" : "group-hover/line:opacity-100", slot ? (right ? "left-0 items-start" : "right-0 items-end") : right ? "left-full ml-2.5 items-start" : "right-full mr-2.5 items-end")}>
-      {time ? <span>{clock(time)}</span> : null}
+    <span aria-hidden className={cn("pointer-events-none absolute top-0.5 flex w-max min-w-7 flex-col text-[10px] leading-[13px] whitespace-nowrap text-ink-4 tabular-nums opacity-0 transition-opacity duration-(--dur-2)", slot ? "group-hover/msg:opacity-100 group-data-[when]/msg:opacity-100" : "group-hover/line:opacity-100 group-data-[when]/line:opacity-100", slot ? (right ? "left-0 items-start" : "right-0 items-end") : right ? "left-full ml-2.5 items-start" : "right-full mr-2.5 items-end")}>
+      {/* As the head's, its number first (kumo, 2026-11-26: the time over it read the other way). */}
       {n !== undefined && <span>#{n}</span>}
+      {time ? <span>{clock(time)}</span> : null}
     </span>
   ) : null;
 
@@ -113,7 +114,30 @@ function onBlank(e: React.MouseEvent): boolean {
  *  till pressed there again (a phone has no hover). Spread on the row's element. */
 export function useWhenRow() {
   const [on, setOn] = useState(false);
-  return { className: "group/msg", "data-when": on ? "" : undefined, onClick: (e: React.MouseEvent) => onBlank(e) && setOn((x) => !x) };
+  return {
+    className: "group/msg",
+    "data-when": on ? "" : undefined,
+    onClick: (e: React.MouseEvent) => {
+      if (!onBlank(e)) return;
+      const at = pressWhen(e.target as Element, noHover());
+      if (at === "row") setOn((x) => !x);
+    },
+  };
+}
+
+/** No pointer to hover with (a finger): a press shows the times. With one (kumo, 2026-11-26: a
+ *  click on a blank left a whole run's lit till clicked again), a pointer over them does alone. */
+const noHover = () => matchMedia("(hover: none)").matches;
+
+/** A press on a row's blank: nothing where there is hover; else the line pressed (a message of a
+ *  run, group/line) shows its own time and number alone, toggled on it ("line"); else the row's
+ *  ("row"). */
+export function pressWhen(target: Element, touch: boolean): "none" | "line" | "row" {
+  if (!touch) return "none";
+  const line = target.closest(".group\\/line");
+  if (!line) return "row";
+  line.toggleAttribute("data-when");
+  return "line";
 }
 
 /** A message's row as an element of its own (useWhenRow), where a hook is not to hand. */
