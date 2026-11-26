@@ -369,6 +369,8 @@ export function UsagePage() {
       if (!n.delete(a)) n.add(a);
       return n;
     });
+  // Right click or hold: only this harness in; when it already is, all back.
+  const onlyHarness = (a: Agent) => setHidden(harnesses.length === 1 && harnesses[0] === a ? new Set() : new Set(AGENTS.filter((o) => o !== a)));
   const on = (id: string) => !off.has(id);
   const shown = s.order.filter(on);
   const many = s.order.length > 1;
@@ -525,7 +527,7 @@ export function UsagePage() {
         {wide && (
           <div className="mr-2 flex items-center gap-4">
             <Ranges value={days} onChange={(n) => (capture(), setDays(n), setDay(null))} />
-            <Harnesses on={(a) => !hidden.has(a)} onToggle={(a) => (capture(), toggleHarness(a))} />
+            <Harnesses on={(a) => !hidden.has(a)} onToggle={(a) => (capture(), toggleHarness(a))} onOnly={(a) => (capture(), onlyHarness(a))} />
           </div>
         )}
         <Dialog.Close render={<IconKey label={t("nav.close")} className="-mr-1" />}>
@@ -535,7 +537,7 @@ export function UsagePage() {
       {!wide && (
         <div className="flex h-9 shrink-0 items-center justify-between gap-2 px-3">
           <Ranges value={days} onChange={(n) => (capture(), setDays(n), setDay(null))} />
-          <Harnesses on={(a) => !hidden.has(a)} onToggle={(a) => (capture(), toggleHarness(a))} />
+          <Harnesses on={(a) => !hidden.has(a)} onToggle={(a) => (capture(), toggleHarness(a))} onOnly={(a) => (capture(), onlyHarness(a))} />
         </div>
       )}
       <div className={cn("no-bar min-h-0 flex-1 overflow-y-auto pb-4", wide ? "pt-2" : "pt-3")}>
@@ -725,24 +727,25 @@ function HeatIcon() {
 
 /** The harnesses as a row of their bare marks (no box: the user, 2026-11-08), each one pressed in
  *  or out of the whole page, faint and grey when out. */
-function Harnesses({ on, onToggle }: { on: (a: Agent) => boolean; onToggle: (a: Agent) => void }) {
+function Harnesses({ on, onToggle, onOnly }: { on: (a: Agent) => boolean; onToggle: (a: Agent) => void; onOnly: (a: Agent) => void }) {
   return (
     <div role="group" aria-label={t("usage.harness")} className="-mr-1 flex items-center">
       {AGENTS.map((a) => (
-        <HarnessKey key={a} a={a} on={on(a)} onToggle={() => onToggle(a)} />
+        <HarnessKey key={a} a={a} on={on(a)} onToggle={() => onToggle(a)} onOnly={() => onOnly(a)} />
       ))}
     </div>
   );
 }
 
-function HarnessKey({ a, on, onToggle }: { a: Agent; on: boolean; onToggle: () => void }) {
+function HarnessKey({ a, on, onToggle, onOnly }: { a: Agent; on: boolean; onToggle: () => void; onOnly: () => void }) {
+  const hold = useHold(onToggle, onOnly);
   return (
     <Tip label={agentName(a)}>
       <button
         type="button"
         aria-pressed={on}
         aria-label={agentName(a)}
-        onClick={onToggle}
+        {...hold}
         className={cn(
           "g-press grid size-7 place-items-center rounded-full transition-[opacity,filter,background-color] duration-(--dur-2) hover:bg-fill pointer-coarse:size-9",
           PRESS,

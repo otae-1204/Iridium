@@ -981,9 +981,19 @@ func (h *Hosted) onEvent(e agent.Event) {
 	h.m.notify(notes...)
 }
 
+// payer is whom a turn begun by from is counted to: from, unless Iridium began it (the host's
+// own relays and prompts, or no one known), then the person its turn is for.
+func (m *Manager) payer(id, from string) string {
+	if from != api.HostID && from != api.SourceIridium && from != "" || m.o.Owner == nil {
+		return from
+	}
+	return cmp.Or(m.o.Owner(id), from)
+}
+
 // recordUsage writes the turn's usage rows, one per model: its share of the session's running
 // totals where the totals before it are known, else the result's tokens, without a cost.
 func (h *Hosted) recordUsage(e agent.TurnUsage, base *agent.Usage, from, model string) {
+	from = h.m.payer(h.id, from)
 	if base == nil {
 		h.mu.Lock()
 		if h.newSession {

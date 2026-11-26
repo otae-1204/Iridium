@@ -69,6 +69,11 @@ type Options struct {
 	ClearPoll time.Duration
 	// Tag names an interactive terminal (by ID) in the source tag "[name] "; nil or "" is the ID.
 	Tag func(terminal string) string
+	// Owner is the person a session's turn is for (its ID, as usage is kept by), down the chain of
+	// agents to the first person; "" if none is known. A turn Iridium began (a channel's relay,
+	// a greeting, a recovery) has its usage counted to that person, not to the host (kumo,
+	// 2026-11-26). nil: none.
+	Owner func(session string) string
 	// QuotaEvery: how often running agents' quota windows are read, on their own, not with a turn
 	// (the user, 2026-11-06); 0 is a minute.
 	QuotaEvery time.Duration
